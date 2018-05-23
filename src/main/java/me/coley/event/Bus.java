@@ -5,7 +5,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Basic event bus. 
+ * Basic event bus.
  * 
  * @author Matt
  */
@@ -54,8 +54,7 @@ public enum Bus {
 	 * @param value
 	 */
 	public void post(Event value) {
-		Handler handler = getHandler(value.getClass());
-		handler.post(value);
+		getHandler(value.getClass()).post(value);
 	}
 
 	/**
@@ -66,10 +65,11 @@ public enum Bus {
 	 */
 	private boolean isValid(Method method) {
 		//@formatter:off
+		Class<?>[] types = method.getParameterTypes();
 		return 
 			// Check parameter for event type
-			method.getParameterCount() == 1 && 
-			Event.class.isAssignableFrom(method.getParameterTypes()[0]) && 
+			types.length == 1 &&
+			Event.class.isAssignableFrom(types[0]) &&
 			// Check if listener annotation exists
 			method.isAnnotationPresent(Listener.class);
 		//@formatter:on
