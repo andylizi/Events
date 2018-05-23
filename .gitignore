@@ -1,0 +1,11 @@
+.metadata/**
+.recommenders/**
+.settings/**
+.idea/**
+bin/**
+target/**
+
+*.iml
+
+.classpath
+.project
