@@ -1,6 +1,6 @@
 # Events [![](https://jitpack.io/v/Col-E/Events.svg)](https://jitpack.io/#Col-E/Events)
 
-This is a basic event handling library that I use in my projects. 
+This is a very basic event handling library.
 
 ### Examples
 
@@ -20,7 +20,7 @@ This project is hosted via JitPack.io. You can add this project to your maven pr
 	<dependency>
 	    <groupId>com.github.Col-E</groupId>
 	    <artifactId>Events</artifactId>
-	    <version>1.0</version>
+	    <version>1.1</version>
 	</dependency>
 </dependencies>
 ```

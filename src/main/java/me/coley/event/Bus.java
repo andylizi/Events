@@ -6,12 +6,12 @@ import java.util.Map;
 
 /**
  * Basic event bus.
- * 
+ *
  * @author Matt
  */
-public enum Bus {
-	INSTANCE;
-	
+public class Bus {
+	private final static Bus INSTANCE = new Bus();
+
 	/**
 	 * Map of event classes to event distribution handlers.
 	 */
@@ -19,13 +19,40 @@ public enum Bus {
 
 	/**
 	 * Register methods in an class instance for receiving events.
-	 * 
+	 *
 	 * @param instance
 	 */
-	public void subscribe(Object instance) {
+	public static void subscribe(Object instance) {
+		INSTANCE.subscribe_(instance);
+	}
+
+	/**
+	 * Unregister methods from receiving events.
+	 *
+	 * @param instance
+	 */
+	public static void unsubscribe(Object instance) {
+		INSTANCE.unsubscribe_(instance);
+	}
+
+	/**
+	 * Post events to listeners.
+	 *
+	 * @param value
+	 */
+	public static void post(Event value) {
+		INSTANCE.post_(value);
+	}
+
+	/**
+	 * Register methods in an class instance for receiving events.
+	 *
+	 * @param instance
+	 */
+	private void subscribe_(Object instance) {
 		Class<?> clazz = instance.getClass();
-		for (Method method : clazz.getDeclaredMethods()) {
-			if (isValid(method)) {
+		for(Method method : clazz.getDeclaredMethods()) {
+			if(isValid(method)) {
 				method.setAccessible(true);
 				Class<?> eventClazz = method.getParameterTypes()[0];
 				getHandler(eventClazz).subscribe(instance, method);
@@ -35,13 +62,13 @@ public enum Bus {
 
 	/**
 	 * Unregister methods from receiving events.
-	 * 
+	 *
 	 * @param instance
 	 */
-	public void unsubscribe(Object instance) {
+	private void unsubscribe_(Object instance) {
 		Class<?> clazz = instance.getClass();
-		for (Method method : clazz.getDeclaredMethods()) {
-			if (isValid(method)) {
+		for(Method method : clazz.getDeclaredMethods()) {
+			if(isValid(method)) {
 				Class<?> eventClazz = method.getParameterTypes()[0];
 				getHandler(eventClazz).unsubscribe(instance, method);
 			}
@@ -50,16 +77,16 @@ public enum Bus {
 
 	/**
 	 * Post events to listeners.
-	 * 
+	 *
 	 * @param value
 	 */
-	public void post(Event value) {
+	public void post_(Event value) {
 		getHandler(value.getClass()).post(value);
 	}
 
 	/**
 	 * Check if method can listen to events,
-	 * 
+	 *
 	 * @param method
 	 * @return
 	 */
@@ -77,13 +104,14 @@ public enum Bus {
 
 	/**
 	 * Retreive handler for the given event class.
-	 * 
+	 *
 	 * @param eventClazz
+	 *
 	 * @return Handler for event type.
 	 */
 	private Handler getHandler(Class<?> eventClazz) {
 		Handler handler = eventToHandler.get(eventClazz);
-		if (handler == null) {
+		if(handler == null) {
 			eventToHandler.put(eventClazz, handler = new Handler());
 		}
 		return handler;
@@ -91,10 +119,10 @@ public enum Bus {
 
 	/**
 	 * Event distribution handler.
-	 * 
+	 *
 	 * @author Matt
 	 */
-	private class Handler {
+	private static class Handler {
 		/**
 		 * Map of method destinations.
 		 */
@@ -102,7 +130,7 @@ public enum Bus {
 
 		/**
 		 * Add method to map.
-		 * 
+		 *
 		 * @param instance
 		 * @param method
 		 */
@@ -113,7 +141,7 @@ public enum Bus {
 
 		/**
 		 * Remove method from map.
-		 * 
+		 *
 		 * @param instance
 		 * @param method
 		 */
@@ -124,7 +152,7 @@ public enum Bus {
 
 		/**
 		 * Send data to methods in map.
-		 * 
+		 *
 		 * @param value
 		 */
 		public void post(Event value) {
@@ -133,10 +161,10 @@ public enum Bus {
 
 		/**
 		 * Reflection invoke wrapper.
-		 * 
+		 *
 		 * @author Matt
 		 */
-		private class InvokeWrapper {
+		private static class InvokeWrapper {
 			private final Object instance;
 			private final Method method;
 
@@ -148,7 +176,7 @@ public enum Bus {
 			public void post(Event value) {
 				try {
 					method.invoke(instance, value);
-				} catch (Exception e) {}
+				} catch(Exception e) {}
 			}
 		}
 	}
