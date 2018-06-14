@@ -1,7 +1,9 @@
 package me.coley.event;
 
 import java.lang.reflect.Method;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 
 /**
@@ -88,6 +90,7 @@ public class Bus {
 	 * Check if method can listen to events,
 	 *
 	 * @param method
+	 *
 	 * @return
 	 */
 	private boolean isValid(Method method) {
@@ -156,7 +159,13 @@ public class Bus {
 		 * @param value
 		 */
 		public void post(Event value) {
-			invokers.values().forEach(i -> i.post(value));
+			// copy to prevent ConcurrentModificationException in cases where a registered item may register more items.
+			//@formatter:off
+			new HashSet<>(invokers.values())
+					.stream()
+					.sorted(Comparator.comparingInt(iw -> iw.priority))
+					.forEach(i -> i.post(value));
+			//@formatter:on
 		}
 
 		/**
@@ -167,10 +176,12 @@ public class Bus {
 		private static class InvokeWrapper {
 			private final Object instance;
 			private final Method method;
+			private final int priority;
 
 			public InvokeWrapper(Object instance, Method method) {
 				this.instance = instance;
 				this.method = method;
+				this.priority = method.getDeclaredAnnotation(Listener.class).priority();
 			}
 
 			public void post(Event value) {

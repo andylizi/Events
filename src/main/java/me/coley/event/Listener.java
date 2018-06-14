@@ -7,9 +7,16 @@ import java.lang.annotation.Target;
 
 /**
  * Annotation for methods indicating the method should receive events.
- * 
+ *
  * @author Matt
  */
 @Target(ElementType.METHOD)
 @Retention(RetentionPolicy.RUNTIME)
-public @interface Listener {}
+public @interface Listener {
+	/**
+	 * Greater values are called first.
+	 *
+	 * @return Priority of event receiving.
+	 */
+	int priority() default 0;
+}
