@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Listener {
 	/**
-	 * Lower values are called first.
+	 * Listener priority. Lower values are called first.
 	 *
 	 * @return Priority of event receiving.
 	 */

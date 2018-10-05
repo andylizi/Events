@@ -1,8 +1,8 @@
 package me.coley.event;
 
 /**
- * Empty event.
- * 
+ * Represents an event.
+ *
  * @author Matt
  */
 public abstract class Event {}
