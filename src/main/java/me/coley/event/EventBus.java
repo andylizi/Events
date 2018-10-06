@@ -39,7 +39,7 @@ public class EventBus {
 		Set<InvokeWrapper> invokers = getInvokers(object, lookup);
 		listenerToInvokers.put(object, invokers);
 		for (InvokeWrapper invoker : invokers) {
-			handlerRegistry.getOrCreateHandler(invoker.eventType).subscribe(invoker);
+			handlerRegistry.getHandler(invoker.eventType).subscribe(invoker);
 		}
 	}
 
@@ -67,8 +67,7 @@ public class EventBus {
 		}
 
 		for (InvokeWrapper invoker : invokers) {
-			Handler handler = handlerRegistry.getHandler(invoker.eventType);
-			if (handler != null) handler.unsubscribe(invoker);
+			handlerRegistry.getHandler(invoker.eventType).unsubscribe(invoker);
 		}
 	}
 
@@ -78,10 +77,8 @@ public class EventBus {
 	 * @param event event to post
 	 */
 	public void post(Event event) {
-		Handler handler = handlerRegistry.getHandler(Objects.requireNonNull(event, "event").getClass());
-		if (handler != null) {
-			handler.post(event);
-		}
+		handlerRegistry.getHandler(Objects.requireNonNull(event, "event").getClass())
+				.post(event);
 	}
 
 	/**
@@ -140,34 +137,13 @@ public class EventBus {
 		 * @param type the event type
 		 * @return the handler for the event type
 		 */
-		public Handler getOrCreateHandler(Class<? extends Event> type) {
+		public Handler getHandler(Class<? extends Event> type) {
 			Handler handler = handlers.get(type);
 			if (handler == null) {
 				computeHierarchy(handler = new Handler(type));
 				handlers.put(type, handler);
 			}
 			return handler;
-		}
-
-		/**
-		 * Gets a {@linkplain Handler handler} for the specified event type.
-		 *
-		 * @param type the event type
-		 * @return the handler for the event type, or {@code null}
-		 *         if there's no handler registered for the event type
-		 */
-		public Handler getHandler(Class<? extends Event> type) {
-			Handler handler = handlers.get(type);
-			if (handler != null) {  // direct lookup successful
-				return handler;
-			} else {
-				if (computeHierarchy(handler = new Handler(type))) {
-					handlers.put(type, handler);
-					return handler;
-				} else {
-					return null;
-				}
-			}
 		}
 
 		/**
