@@ -1,5 +1,6 @@
 package me.coley.event;
 
+import me.coley.event.testevent.TestAlphaEvent;
 import org.openjdk.jmh.annotations.*;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
@@ -24,13 +25,13 @@ public class EventBusBenchmark {
 	}
 
 	private EventBus bus;
-	private MyEvent event;
+	private TestAlphaEvent event;
 
 	@Setup
 	public void setup() {
 		this.bus = new EventBus();
 		this.bus.subscribe(this);
-		this.event = new MyEvent();
+		this.event = new TestAlphaEvent();
 	}
 
 	@Benchmark
@@ -39,9 +40,7 @@ public class EventBusBenchmark {
 	}
 
 	@Listener
-	public void onEvent(MyEvent event) {
-		event.i++;
+	public void onEvent(TestAlphaEvent event) {
+		event.id++;
 	}
-
-	static class MyEvent extends Event { int i = 0; }
 }

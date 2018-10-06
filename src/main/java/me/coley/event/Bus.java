@@ -12,7 +12,7 @@ public final class Bus {
 	private static final EventBus EVENT_BUS = new EventBus();
 
 	/**
-	 * Register all listener methods on {@code object} for receiving events.
+	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup} object used in {@link MethodHandle} creation
@@ -26,19 +26,19 @@ public final class Bus {
 	}
 
 	/**
-	 * Register all listener methods on {@code object} for receiving events.
+	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @throws IllegalArgumentException if the {@code object} was previously registered
 	 *                                  or there's an invalid listener method on the {@code object}
 	 * @see EventBus#subscribe(Object)
 	 */
-	public void subscribe(Object object) throws IllegalArgumentException, SecurityException {
+	public static void subscribe(Object object) throws IllegalArgumentException, SecurityException {
 		EVENT_BUS.subscribe(object);
 	}
 
 	/**
-	 * Unregister all listener methods on the {@code object}.
+	 * Unregisters all listener methods on the {@code object}.
 	 *
 	 * @param object object whose listener methods should be unregistered
 	 * @see EventBus#unsubscribe(Object)

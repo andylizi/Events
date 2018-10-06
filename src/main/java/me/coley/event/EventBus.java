@@ -13,17 +13,17 @@ import java.util.*;
  */
 public class EventBus {
 	/**
-	 * Map of event classes to event distribution handlers.
-	 */
-	protected final Map<Class<? extends Event>, Handler> eventToHandler = new HashMap<>();
-
-	/**
 	 * Map of listener objects to listener invokers.
 	 */
 	protected final Map<Object, Set<InvokeWrapper>> listenerToInvokers = new HashMap<>();
 
 	/**
-	 * Register all listener methods on {@code object} for receiving events.
+	 * Handler registry.
+	 */
+	protected final HandlerRegistry handlerRegistry = new HandlerRegistry();
+
+	/**
+	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup} object used in {@link MethodHandle} creation
@@ -39,12 +39,12 @@ public class EventBus {
 		Set<InvokeWrapper> invokers = getInvokers(object, lookup);
 		listenerToInvokers.put(object, invokers);
 		for (InvokeWrapper invoker : invokers) {
-			getHandler(invoker.eventType).subscribe(invoker);
+			handlerRegistry.getOrCreateHandler(invoker.eventType).subscribe(invoker);
 		}
 	}
 
 	/**
-	 * Register all listener methods on {@code object} for receiving events.
+	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @throws IllegalArgumentException if the {@code object} was previously registered
@@ -55,7 +55,7 @@ public class EventBus {
 	}
 
 	/**
-	 * Unregister all listener methods on the {@code object}.
+	 * Unregisters all listener methods on the {@code object}.
 	 *
 	 * @param object object whose listener methods should be unregistered
 	 */
@@ -67,7 +67,8 @@ public class EventBus {
 		}
 
 		for (InvokeWrapper invoker : invokers) {
-			getHandler(invoker.eventType).unsubscribe(invoker);
+			Handler handler = handlerRegistry.getHandler(invoker.eventType);
+			if (handler != null) handler.unsubscribe(invoker);
 		}
 	}
 
@@ -77,7 +78,10 @@ public class EventBus {
 	 * @param event event to post
 	 */
 	public void post(Event event) {
-		getHandler(Objects.requireNonNull(event, "event").getClass()).post(event);
+		Handler handler = handlerRegistry.getHandler(Objects.requireNonNull(event, "event").getClass());
+		if (handler != null) {
+			handler.post(event);
+		}
 	}
 
 	/**
@@ -96,15 +100,6 @@ public class EventBus {
 			}
 		}
 		return result;
-	}
-
-	/**
-	 * Retreives handler for the given event class.
-	 *
-	 * @return handler for event type
-	 */
-	protected Handler getHandler(Class<? extends Event> eventClass) {
-		return eventToHandler.computeIfAbsent(eventClass, Handler::new);
 	}
 
 	/**
@@ -128,15 +123,77 @@ public class EventBus {
 		if (!Event.class.isAssignableFrom(params[0])) {
 			throw new IllegalArgumentException("Parameter must be a subclass of the Event class: " + method.toGenericString());
 		}
-		if (Modifier.isAbstract(params[0].getModifiers())) {
-			throw new IllegalArgumentException("Parameter type cannot be an abstract class or interface: " + method.toGenericString());
+	}
+
+	/**
+	 * Handler registry (for supertype event handling).
+	 */
+	static final class HandlerRegistry {
+		/**
+		 * Map of all registered handlers.
+		 */
+		private final Map<Class<? extends Event>, Handler> handlers = new HashMap<>();
+
+		/**
+		 * Gets or creates the {@linkplain Handler handler} for the specified event type.
+		 *
+		 * @param type the event type
+		 * @return the handler for the event type
+		 */
+		public Handler getOrCreateHandler(Class<? extends Event> type) {
+			Handler handler = handlers.get(type);
+			if (handler == null) {
+				computeHierarchy(handler = new Handler(type));
+				handlers.put(type, handler);
+			}
+			return handler;
+		}
+
+		/**
+		 * Gets a {@linkplain Handler handler} for the specified event type.
+		 *
+		 * @param type the event type
+		 * @return the handler for the event type, or {@code null}
+		 *         if there's no handler registered for the event type
+		 */
+		public Handler getHandler(Class<? extends Event> type) {
+			Handler handler = handlers.get(type);
+			if (handler != null) {  // direct lookup successful
+				return handler;
+			} else {
+				if (computeHierarchy(handler = new Handler(type))) {
+					handlers.put(type, handler);
+					return handler;
+				} else {
+					return null;
+				}
+			}
+		}
+
+		/**
+		 * Computes and updates the registry's handler hierarchy with the specified handler.
+		 *
+		 * @return {@code true} if the specified {@linkplain Handler handler} has
+		 *         an association(subtype or supertype) with at least one handler
+		 *         in the current registry <b>and</b> the hierarchy had been updated,
+		 *         {@code false} otherwise
+		 */
+		boolean computeHierarchy(Handler subject) {
+			boolean associationFound = false;
+			for (Handler handler : handlers.values()) {
+				if (subject == handler) continue;
+				if (subject.isSubtypeOf(handler)) {
+					associationFound |= subject.addSupertypeHandler(handler);
+				} else if (handler.isSubtypeOf(subject)) {
+					associationFound |= handler.addSupertypeHandler(subject);
+				}
+			}
+			return associationFound;
 		}
 	}
 
 	/**
 	 * Event distribution handler.
-	 *
-	 * @author Matt
 	 */
 	static class Handler {
 		/**
@@ -145,15 +202,30 @@ public class EventBus {
 		private final Class<? extends Event> eventType;
 
 		/**
+		 * All known handlers which event type is a supertype of this handler's event type.
+		 * <p>
+		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #supertypeHandlerCache}.
+		 */
+		private final Set<Handler> supertypeHandlers = new HashSet<>();
+
+		/**
 		 * Set of {@linkplain InvokeWrapper invokers} registered in this handler.
+		 * <p>
+		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #invokerCache}.
 		 */
 		private final NavigableSet<InvokeWrapper> invokers = new TreeSet<>(InvokeWrapper.COMPARATOR);
 
 		/**
-		 * Cache for {@code invokers}.
+		 * Cache for the {@link #supertypeHandlers} field.
 		 */
 		@SuppressWarnings("VolatileArrayField")
-		private transient volatile Object[] cache = null;
+		private transient volatile Object[] supertypeHandlerCache = null;
+
+		/**
+		 * Cache for the {@link #invokers} field.
+		 */
+		@SuppressWarnings("VolatileArrayField")
+		private transient volatile Object[] invokerCache = null;
 
 		Handler(Class<? extends Event> eventType) { this.eventType = eventType; }
 
@@ -176,18 +248,42 @@ public class EventBus {
 		}
 
 		/**
-		 * Posts an event to all registered listeners in this handler.
+		 * Posts an event to all registered listeners in this handler and its supertype handlers.
 		 *
 		 * @param event event to post
 		 */
 		public void post(Event event) {
+			invoke(event);
+
+			if (hasSupertypeHandler()) {
+				// Prevent ConcurrentModificationException
+				// in cases where a registered item may register more items.
+				Object[] handlerArray = supertypeHandlerCache;
+				if (handlerArray == null) {
+					synchronized (this) {
+						if ((handlerArray = supertypeHandlerCache) == null) {
+							handlerArray = supertypeHandlerCache = supertypeHandlers.toArray();
+						}
+					}
+				}
+
+				for (Object handler : handlerArray) {
+					((Handler) handler).invoke(event);
+				}
+			}
+		}
+
+		/**
+		 * Invokes all invokers in this handler.
+		 */
+		void invoke(Event event) {
 			// Prevent ConcurrentModificationException
 			// in cases where a registered item may register more items.
-			Object[] invokerArray = cache;
+			Object[] invokerArray = invokerCache;
 			if (invokerArray == null) {
 				synchronized (this) {
-					if ((invokerArray = cache) == null) {
-						invokerArray = cache = invokers.toArray();
+					if ((invokerArray = invokerCache) == null) {
+						invokerArray = invokerCache = invokers.toArray();
 					}
 				}
 			}
@@ -198,6 +294,18 @@ public class EventBus {
 		}
 
 		/**
+		 * Invalidates the {@link #invokerCache} and the {@link #supertypeHandlerCache}
+		 * when {@code modified} is {@code true}.
+		 *
+		 * @param modified should we invalidate?
+		 * @return same value as {@code modified}
+		 */
+		boolean invalidateCache(boolean modified) {
+			if (modified) this.invokerCache = this.supertypeHandlerCache = null;
+			return modified;
+		}
+
+		/**
 		 * @return event type for this handler
 		 */
 		public Class<? extends Event> eventType() {
@@ -205,14 +313,57 @@ public class EventBus {
 		}
 
 		/**
-		 * Invalidates the {@code invokers} cache when {@code modified} is {@code true}.
+		 * Determines if the event type for this handler
+		 * is a subtype of the specified {@code Class} parameter.
 		 *
-		 * @param modified should invalidate?
-		 * @return same value as {@code modified}
+		 * @param cls the {@code Class} object to be checked
+		 * @return {@code true} if the event type for this handler
+		 *         is a subtype of the type represented by {@code cls},
+		 *         {@code false} otherwise
 		 */
-		boolean invalidateCache(boolean modified) {
-			if (modified) this.cache = null;
-			return modified;
+		public boolean isSubtypeOf(Class<?> cls) {
+			Class<? extends Event> type = eventType();
+			return type != cls && cls.isAssignableFrom(type);
+		}
+
+		/**
+		 * Determines if the event type for this handler is a subtype of
+		 * the event type for the specified {@code handler} parameter.
+		 *
+		 * @param handler the {@code Handler} object to be checked
+		 * @return {@code true} if the event type for this handler is a subtype of
+		 *         the event type for the {@code handler} parameter,
+		 *         {@code false} otherwise
+		 */
+		public boolean isSubtypeOf(Handler handler) {
+			return isSubtypeOf(handler.eventType());
+		}
+
+		/**
+		 * Returns {@code true} if this hander has at least one supertype handler.
+		 */
+		public boolean hasSupertypeHandler() {
+			return !supertypeHandlers.isEmpty();
+		}
+
+		/**
+		 * Gets an unmodifiable view of this handler's supertype handlers.
+		 *
+		 * @return an unmodifiable view
+		 */
+		public Set<Handler> getSupertypeHandlers() {
+			return Collections.unmodifiableSet(supertypeHandlers);
+		}
+
+		/**
+		 * Adds a handler as this handler's supertype handler if it isn't already present.
+		 *
+		 * @param handler the supertype handler to be added
+		 * @return {@code true} if any modification occurred, {@code false} otherwise.
+		 */
+		boolean addSupertypeHandler(Handler handler) {
+			if (handler == this) return false;
+			return invalidateCache(supertypeHandlers.add(handler));
 		}
 
 		@Override
@@ -235,10 +386,12 @@ public class EventBus {
 
 	/**
 	 * Listener method invocation wrapper.
-	 *
-	 * @author Matt
 	 */
 	static class InvokeWrapper implements Comparable<InvokeWrapper> {
+		/**
+		 * Compares Invokewrappers using their {@code priority} value,
+		 * and only returns 0 when {@code o1.equals(o2)}.
+		 */
 		public static final Comparator<InvokeWrapper> COMPARATOR = (o1, o2) -> {
 			if (fastEqual(o1, o2)) return 0;
 
@@ -316,7 +469,7 @@ public class EventBus {
 		}
 
 		/**
-		 * Compares two InvokeWrappers using their {@code priority} value.
+		 * Compares this object with another InvokeWrapper for order.
 		 */
 		@Override
 		public int compareTo(InvokeWrapper o) {
