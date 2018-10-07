@@ -32,8 +32,7 @@ public class EventBus {
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup object} used in {@link MethodHandle} creation
-	 * @throws IllegalArgumentException if the {@code object} was previously registered
-	 *                                  or there's an invalid listener method on the {@code object}
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
 	 * @throws SecurityException        if a security manager denied access to the declared methods
 	 *                                  of the class of the {@code object}, or the provided
 	 *                                  {@linkplain MethodHandles.Lookup lookup object}
@@ -41,9 +40,11 @@ public class EventBus {
 	 * @see MethodHandles.Lookup
 	 * @since 1.3
 	 */
+	@SuppressWarnings("EqualsWithItself")
 	public void subscribe(Object object, MethodHandles.Lookup lookup) throws IllegalArgumentException, SecurityException {
-		if (listenerToInvokers.containsKey(Objects.requireNonNull(object))) {
-			throw new IllegalArgumentException("Listener already registered: " + object);
+		if (!object.equals(object)) throw new IllegalArgumentException("Broken equals() implementation");
+		if (listenerToInvokers.containsKey(object)) {
+			return;  // Already registered
 		}
 
 		Set<InvokeWrapper> invokers = getInvokers(object, lookup);
@@ -57,8 +58,7 @@ public class EventBus {
 	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
-	 * @throws IllegalArgumentException if the {@code object} was previously registered
-	 *                                  or there's an invalid listener method on the {@code object}
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
 	 * @throws SecurityException        if a security manager denied access to the declared methods
 	 *                                  of the class of the {@code object}, or the default
 	 *                                  {@linkplain MethodHandles.Lookup lookup object} cannot access
@@ -75,11 +75,12 @@ public class EventBus {
 	 *
 	 * @param object object whose listener methods should be unregistered
 	 */
+	@SuppressWarnings("EqualsWithItself")
 	public void unsubscribe(Object object) {
-		Objects.requireNonNull(object);
+		if (!object.equals(object)) throw new IllegalArgumentException("Broken equals() implementation");
 		Set<InvokeWrapper> invokers = listenerToInvokers.remove(object);
 		if (invokers == null || invokers.isEmpty()) {
-			return; // do nothing
+			return; // Not registered
 		}
 
 		for (InvokeWrapper invoker : invokers) {
@@ -468,6 +469,8 @@ public class EventBus {
 		public void invoke(Event event) throws RuntimeException {
 			try {
 				methodHandle.invoke(listener, event);
+			} catch (RuntimeException | Error e) {
+				throw e;
 			} catch (Throwable e) {
 				throw new RuntimeException("Exception while invoking listener", e);
 			}

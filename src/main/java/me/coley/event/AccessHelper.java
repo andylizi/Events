@@ -78,6 +78,8 @@ final class AccessHelper {
 	 * @throws IllegalAccessException if access checking fails and cannot be bypassed
 	 * @see Lookup#unreflect(Method)
 	 */
+	// suppress warning for when compile with Java 9+ (isAccessible() method is deprecated since Java 9)
+	@SuppressWarnings("deprecation")
 	static MethodHandle unreflectMethodHandle0(Lookup lookup, Method method) throws IllegalAccessException {
 		boolean accessible = method.isAccessible();
 		if ((isAtLeastJava9() && !pretendJava8) || pretendJava9) {  // Java 9+

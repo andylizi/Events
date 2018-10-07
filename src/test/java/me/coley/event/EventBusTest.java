@@ -48,10 +48,8 @@ public class EventBusTest {
 		bus.unsubscribe(object);
 		bus.post(new TestAlphaEvent());
 		bus.post(new TestZetaEvent());
-		marker.assertUnmarked("%s received after unsubscribied", TestAlphaEvent.class);
+		marker.assertUnmarked("%s received after unsubscribed", TestAlphaEvent.class);
 		marker.resetAll();
-
-		bus.unsubscribe(object); // should do nothing
 
 		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
@@ -185,11 +183,33 @@ public class EventBusTest {
 		assertEquals("invocation order", Arrays.asList(1, 2), invocationOrder);
 	}
 
-	@Test(expected = IllegalArgumentException.class)
-	public void testPreviouslySubscribed() {
-		Object object = new Object();
+	@Test
+	public void testSubscribeAgain() {
+		Object object = new Object() {
+			@Listener
+			public void onEvent(TestAlphaEvent event) {
+				marker.mark(TestAlphaEvent.class);
+			}
+		};
 		bus.subscribe(object);
 		bus.subscribe(object);
+		bus.post(new TestAlphaEvent());
+		marker.assertMarkedOnce("%s received twice or more times", TestAlphaEvent.class);
+	}
+
+	@Test
+	public void testUnsubscribAgain() {
+		Object object = new Object() {
+			@Listener
+			public void onEvent(TestAlphaEvent event) {
+				marker.mark(TestAlphaEvent.class);
+			}
+		};
+		bus.subscribe(object);
+		bus.unsubscribe(object);
+		bus.unsubscribe(object);
+		bus.post(new TestAlphaEvent());
+		marker.assertUnmarked("%s received", TestAlphaEvent.class);
 	}
 
 	@Test(expected = IllegalArgumentException.class)
