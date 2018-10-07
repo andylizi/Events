@@ -15,10 +15,15 @@ public final class Bus {
 	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
-	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup} object used in {@link MethodHandle} creation
+	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup object} used in {@link MethodHandle} creation
 	 * @throws IllegalArgumentException if the {@code object} was previously registered
 	 *                                  or there's an invalid listener method on the {@code object}
+	 * @throws SecurityException        if a security manager denied access to the declared methods
+	 *                                  of the class of the {@code object}, or the provided
+	 *                                  {@linkplain MethodHandles.Lookup lookup object}
+	 *                                  cannot access one of the listener method found in the class
 	 * @see EventBus#subscribe(Object, MethodHandles.Lookup)
+	 * @see MethodHandles.Lookup
 	 * @since 1.3
 	 */
 	public static void subscribe(Object object, MethodHandles.Lookup lookup) throws IllegalArgumentException, SecurityException {
@@ -31,6 +36,10 @@ public final class Bus {
 	 * @param object object whose listener methods should be registered
 	 * @throws IllegalArgumentException if the {@code object} was previously registered
 	 *                                  or there's an invalid listener method on the {@code object}
+	 * @throws SecurityException        if a security manager denied access to the declared methods
+	 *                                  of the class of the {@code object}, or the default
+	 *                                  {@linkplain MethodHandles.Lookup lookup object} cannot access
+	 *                                  one of the listener method found in the class
 	 * @see EventBus#subscribe(Object)
 	 */
 	public static void subscribe(Object object) throws IllegalArgumentException, SecurityException {

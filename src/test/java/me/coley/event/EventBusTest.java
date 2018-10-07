@@ -3,6 +3,7 @@ package me.coley.event;
 import me.coley.event.testevent.*;
 import org.junit.*;
 
+import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -11,15 +12,16 @@ import static org.junit.Assert.*;
 
 public class EventBusTest {
 	private EventBus bus;
+	private EventMarker<Class<? extends Event>> marker;
 
 	@Before
 	public void setup() {
-		bus = new EventBus();
+		this.bus = new EventBus();
+		this.marker = new EventMarker<>(Class::getSimpleName);
 	}
 
 	@Test
 	public void testBasicFunctionality() {
-		EventMarker<Class<? extends Event>> marker = new EventMarker<>(Class::getSimpleName);
 		Object object = new Object() {
 			@Listener
 			public void onEventA(TestAlphaEvent event) {
@@ -33,14 +35,14 @@ public class EventBusTest {
 		};
 		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
-		marker.assertMarked("%s received", TestAlphaEvent.class);
+		marker.assertMarkedOnce("%s received", TestAlphaEvent.class);
 		marker.assertUnmarked("%s received before post", TestBetaEvent.class);
 		bus.post(new TestBetaEvent());
 		bus.post(new TestGammaEvent());
 		bus.post(new TestDeltaEvent());
 		bus.post(new TestEpsilonEvent());
 		bus.post(new TestZetaEvent());
-		marker.assertMarked("%s received", TestBetaEvent.class);
+		marker.assertMarkedOnce("%s received", TestBetaEvent.class);
 		marker.resetAll();
 
 		bus.unsubscribe(object);
@@ -53,7 +55,7 @@ public class EventBusTest {
 
 		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
-		marker.assertMarked("%s received again", TestAlphaEvent.class);
+		marker.assertMarkedOnce("%s received again", TestAlphaEvent.class);
 	}
 
 	@Test
@@ -87,7 +89,6 @@ public class EventBusTest {
 	@Test
 	@SuppressWarnings("unchecked")
 	public void testSupertype1() {
-		EventMarker<Class<? extends Event>> marker = new EventMarker<>(Class::getSimpleName);
 		bus.subscribe(new Object() {
 			@Listener
 			public void onBeta(TestBetaEvent event) {
@@ -108,7 +109,6 @@ public class EventBusTest {
 	@Test
 	@SuppressWarnings("unchecked")
 	public void testSupertype2() {
-		EventMarker<Class<? extends Event>> marker = new EventMarker<>(Class::getSimpleName);
 		bus.subscribe(new Object() {
 			@Listener
 			public void onGamma(TestGammaEvent event) {
@@ -129,6 +129,36 @@ public class EventBusTest {
 		marker.assertMarkedExactly(null, new Class[]{
 				TestGammaEvent.class, TestEpsilonEvent.class, TestZetaEvent.class
 		});
+	}
+
+	@Test
+	public void testNonPublicListener() {
+		bus.subscribe(new PackageListener(marker), MethodHandles.lookup());
+		bus.post(new TestAlphaEvent());
+		marker.assertMarked("%s received", TestAlphaEvent.class);
+	}
+
+	@Test
+	public void testMemberClassListener() {
+		testMemberClassListener0(true, false);
+		testMemberClassListener0(false, true);
+	}
+
+	private void testMemberClassListener0(boolean pretendJava8, boolean pretendJava9) {
+		// Don't setAccessible(true)
+		// we are in the same module, setAccessible() can bypass anything, so the test will become meaningless
+		AccessHelper.trySuppressAccessControl = false;
+		AccessHelper.pretendJava8 = pretendJava8;
+		AccessHelper.pretendJava9 = pretendJava9;
+		try {
+			bus.subscribe(new MemberListener(marker), MethodHandles.lookup());
+			bus.post(new TestAlphaEvent());
+			marker.assertMarked("%s received", TestAlphaEvent.class);
+		} finally {
+			AccessHelper.trySuppressAccessControl = true;
+			AccessHelper.pretendJava8 = false;
+			AccessHelper.pretendJava9 = false;
+		}
 	}
 
 	@Test
@@ -184,6 +214,27 @@ public class EventBusTest {
 		@Listener
 		public static void onEvent(TestAlphaEvent event) {
 			fail("static listener called");
+		}
+	}
+
+	static class MemberListener {
+		private final EventMarker<Class<? extends Event>> marker;
+
+		MemberListener(EventMarker<Class<? extends Event>> marker) { this.marker = marker; }
+
+		@Listener
+		public void publicListener(Event event) {
+			marker.mark(event.getClass());
+		}
+
+		@Listener
+		void packageListener(Event event) {
+			marker.mark(event.getClass());
+		}
+
+		@Listener
+		private void privateListener(Event event) {
+			marker.mark(event.getClass());
 		}
 	}
 }
