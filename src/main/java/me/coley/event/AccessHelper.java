@@ -13,6 +13,7 @@ import static java.lang.invoke.MethodHandles.Lookup;
  * Access helper.
  *
  * @since 1.3
+ * @author Andy Li
  */
 final class AccessHelper {
 	/**

@@ -9,7 +9,7 @@ import java.util.*;
 /**
  * Represents an event bus.
  *
- * @author Matt
+ * @author Matt, Andy Li
  */
 public class EventBus {
 	/**

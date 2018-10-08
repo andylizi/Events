@@ -12,6 +12,9 @@ import java.util.stream.Stream;
 
 import static org.junit.Assert.*;
 
+/**
+ * @author Andy Li
+ */
 public class EventMarker<T> {
 	private final List<T> marks = new ArrayList<>();
 	private final Function<T, String> toStringFunction;

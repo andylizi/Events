@@ -10,6 +10,9 @@ import java.util.List;
 
 import static org.junit.Assert.*;
 
+/**
+ * @author Andy Li
+ */
 public class EventBusTest {
 	private EventBus bus;
 	private EventMarker<Class<? extends Event>> marker;

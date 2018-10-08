@@ -1,5 +1,8 @@
 package me.coley.event.testevent;
 
+/**
+ * @author Andy Li
+ */
 public class TestGammaEvent extends TestBetaEvent {
 	public TestGammaEvent() {
 	}

@@ -6,7 +6,7 @@ import java.lang.invoke.MethodHandles;
 /**
  * Basic event bus.
  *
- * @author Matt
+ * @author Matt, Andy Li
  */
 public final class Bus {
 	private static final EventBus EVENT_BUS = new EventBus();
