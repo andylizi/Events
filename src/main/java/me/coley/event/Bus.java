@@ -1,194 +1,67 @@
 package me.coley.event;
 
-import java.lang.reflect.Method;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
 
 /**
  * Basic event bus.
  *
  * @author Matt
  */
-public class Bus {
-	private final static Bus INSTANCE = new Bus();
+public final class Bus {
+	private static final EventBus EVENT_BUS = new EventBus();
 
 	/**
-	 * Map of event classes to event distribution handlers.
-	 */
-	private final Map<Class<?>, Handler> eventToHandler = new HashMap<>();
-
-	/**
-	 * Register methods in an class instance for receiving events.
+	 * Registers all listener methods on {@code object} for receiving events.
 	 *
-	 * @param instance
+	 * @param object object whose listener methods should be registered
+	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup object} used in {@link MethodHandle} creation
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
+	 * @throws SecurityException        if a security manager denied access to the declared methods
+	 *                                  of the class of the {@code object}, or the provided
+	 *                                  {@linkplain MethodHandles.Lookup lookup object}
+	 *                                  cannot access one of the listener method found in the class
+	 * @see EventBus#subscribe(Object, MethodHandles.Lookup)
+	 * @see MethodHandles.Lookup
+	 * @since 1.3
 	 */
-	public static void subscribe(Object instance) {
-		INSTANCE.subscribe_(instance);
+	public static void subscribe(Object object, MethodHandles.Lookup lookup) throws IllegalArgumentException, SecurityException {
+		EVENT_BUS.subscribe(object, lookup);
 	}
 
 	/**
-	 * Unregister methods from receiving events.
+	 * Registers all listener methods on {@code object} for receiving events.
 	 *
-	 * @param instance
+	 * @param object object whose listener methods should be registered
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
+	 * @throws SecurityException        if a security manager denied access to the declared methods
+	 *                                  of the class of the {@code object}, or the default
+	 *                                  {@linkplain MethodHandles.Lookup lookup object} cannot access
+	 *                                  one of the listener method found in the class
+	 * @see EventBus#subscribe(Object)
 	 */
-	public static void unsubscribe(Object instance) {
-		INSTANCE.unsubscribe_(instance);
+	public static void subscribe(Object object) throws IllegalArgumentException, SecurityException {
+		EVENT_BUS.subscribe(object);
 	}
 
 	/**
-	 * Post events to listeners.
+	 * Unregisters all listener methods on the {@code object}.
 	 *
-	 * @param value
+	 * @param object object whose listener methods should be unregistered
+	 * @see EventBus#unsubscribe(Object)
 	 */
-	public static void post(Event value) {
-		INSTANCE.post_(value);
+	public static void unsubscribe(Object object) {
+		EVENT_BUS.unsubscribe(object);
 	}
 
 	/**
-	 * Register methods in an class instance for receiving events.
+	 * Posts an event to all registered listeners.
 	 *
-	 * @param instance
+	 * @param event event to post
 	 */
-	private void subscribe_(Object instance) {
-		Class<?> clazz = instance.getClass();
-		for(Method method : clazz.getDeclaredMethods()) {
-			if(isValid(method)) {
-				method.setAccessible(true);
-				Class<?> eventClazz = method.getParameterTypes()[0];
-				getHandler(eventClazz).subscribe(instance, method);
-			}
-		}
+	public static void post(Event event) {
+		EVENT_BUS.post(event);
 	}
 
-	/**
-	 * Unregister methods from receiving events.
-	 *
-	 * @param instance
-	 */
-	private void unsubscribe_(Object instance) {
-		Class<?> clazz = instance.getClass();
-		for(Method method : clazz.getDeclaredMethods()) {
-			if(isValid(method)) {
-				Class<?> eventClazz = method.getParameterTypes()[0];
-				getHandler(eventClazz).unsubscribe(instance, method);
-			}
-		}
-	}
-
-	/**
-	 * Post events to listeners.
-	 *
-	 * @param value
-	 */
-	public void post_(Event value) {
-		getHandler(value.getClass()).post(value);
-	}
-
-	/**
-	 * Check if method can listen to events,
-	 *
-	 * @param method
-	 *
-	 * @return
-	 */
-	private boolean isValid(Method method) {
-		//@formatter:off
-		Class<?>[] types = method.getParameterTypes();
-		return 
-			// Check parameter for event type
-			types.length == 1 &&
-			Event.class.isAssignableFrom(types[0]) &&
-			// Check if listener annotation exists
-			method.isAnnotationPresent(Listener.class);
-		//@formatter:on
-	}
-
-	/**
-	 * Retreive handler for the given event class.
-	 *
-	 * @param eventClazz
-	 *
-	 * @return Handler for event type.
-	 */
-	private Handler getHandler(Class<?> eventClazz) {
-		Handler handler = eventToHandler.get(eventClazz);
-		if(handler == null) {
-			eventToHandler.put(eventClazz, handler = new Handler());
-		}
-		return handler;
-	}
-
-	/**
-	 * Event distribution handler.
-	 *
-	 * @author Matt
-	 */
-	private static class Handler {
-		/**
-		 * Map of method destinations.
-		 */
-		private final Map<String, InvokeWrapper> invokers = new HashMap<>();
-
-		/**
-		 * Add method to map.
-		 *
-		 * @param instance
-		 * @param method
-		 */
-		public void subscribe(Object instance, Method method) {
-			String key = instance.toString() + method.toString();
-			invokers.put(key, new InvokeWrapper(instance, method));
-		}
-
-		/**
-		 * Remove method from map.
-		 *
-		 * @param instance
-		 * @param method
-		 */
-		public void unsubscribe(Object instance, Method method) {
-			String key = instance.toString() + method.toString();
-			invokers.remove(key);
-		}
-
-		/**
-		 * Send data to methods in map.
-		 *
-		 * @param value
-		 */
-		public void post(Event value) {
-			// copy to prevent ConcurrentModificationException in cases where a registered item may register more items.
-			//@formatter:off
-			new HashSet<>(invokers.values())
-					.stream()
-					.sorted(Comparator.comparingInt(iw -> iw.priority))
-					.forEach(i -> i.post(value));
-			//@formatter:on
-		}
-
-		/**
-		 * Reflection invoke wrapper.
-		 *
-		 * @author Matt
-		 */
-		private static class InvokeWrapper {
-			private final Object instance;
-			private final Method method;
-			private final int priority;
-
-			public InvokeWrapper(Object instance, Method method) {
-				this.instance = instance;
-				this.method = method;
-				this.priority = method.getDeclaredAnnotation(Listener.class).priority();
-			}
-
-			public void post(Event value) {
-				try {
-					method.invoke(instance, value);
-				} catch(Exception e) {}
-			}
-		}
-	}
+	private Bus() {}
 }
