@@ -225,26 +225,21 @@ public class EventBus {
 		/**
 		 * All known handlers which event type is a supertype of this handler's event type.
 		 * <p>
-		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #supertypeHandlerCache}.
+		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #computedInvokerCache}.
 		 */
 		private final Set<Handler> supertypeHandlers = new HashSet<>();
 
 		/**
 		 * Set of {@linkplain InvokeWrapper invokers} registered in this handler.
 		 * <p>
-		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #invokerCache}.
+		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #computedInvokerCache}.
 		 */
-		private final NavigableSet<InvokeWrapper> invokers = new TreeSet<>(InvokeWrapper.COMPARATOR);
+		private final SortedSet<InvokeWrapper> invokers = new TreeSet<>(InvokeWrapper.COMPARATOR);
 
 		/**
-		 * Cache for the {@link #supertypeHandlers} field.
+		 * Computed invoker cache.
 		 */
-		private transient volatile Object[] supertypeHandlerCache = null;
-
-		/**
-		 * Cache for the {@link #invokers} field.
-		 */
-		private transient volatile Object[] invokerCache = null;
+		private transient volatile InvokeWrapper[] computedInvokerCache = null;
 
 		Handler(Class<? extends Event> eventType) { this.eventType = eventType; }
 
@@ -272,55 +267,43 @@ public class EventBus {
 		 * @param event event to post
 		 */
 		public void post(Event event) {
-			invoke(event);
-
-			if (hasSupertypeHandler()) {
-				// Prevent ConcurrentModificationException
-				// in cases where a registered item may register more items.
-				Object[] cache = supertypeHandlerCache;
-				if (cache == null) {
-					synchronized (this) {
-						if ((cache = supertypeHandlerCache) == null) {
-							cache = supertypeHandlerCache = supertypeHandlers.toArray();
-						}
-					}
-				}
-
-				for (Object handler : cache) {
-					((Handler) handler).invoke(event);
-				}
-			}
-		}
-
-		/**
-		 * Invokes all invokers in this handler.
-		 */
-		void invoke(Event event) {
-			// Prevent ConcurrentModificationException
-			// in cases where a registered item may register more items.
-			Object[] cache = invokerCache;
+			InvokeWrapper[] cache = this.computedInvokerCache;
 			if (cache == null) {
 				synchronized (this) {
-					if ((cache = invokerCache) == null) {
-						cache = invokerCache = invokers.toArray();
+					if ((cache = this.computedInvokerCache) == null) {
+						cache = this.computedInvokerCache = computeInvokerCache();
 					}
 				}
 			}
 
-			for (Object invoker : cache) {
-				((InvokeWrapper) invoker).invoke(event);
+			for (InvokeWrapper invoker : cache) {
+				invoker.invoke(event);
 			}
 		}
 
 		/**
-		 * Invalidates the {@link #invokerCache} and the {@link #supertypeHandlerCache}
-		 * when {@code modified} is {@code true}.
+		 * Computes all invokers that need to be invoked when this handler received an event.
+		 */
+		synchronized InvokeWrapper[] computeInvokerCache() {
+			SortedSet<InvokeWrapper> set;
+			if (hasSupertypeHandler()) {
+				set = new TreeSet<>(this.invokers);
+				for (Handler supertypeHandler : this.supertypeHandlers)
+					set.addAll(supertypeHandler.invokers);
+			} else {
+				set = this.invokers;
+			}
+			return set.toArray(new InvokeWrapper[0]);
+		}
+
+		/**
+		 * Invalidates the {@link #computedInvokerCache} when {@code modified} is {@code true}.
 		 *
 		 * @param modified should we invalidate?
 		 * @return same value as {@code modified}
 		 */
 		boolean invalidateCache(boolean modified) {
-			if (modified) this.invokerCache = this.supertypeHandlerCache = null;
+			if (modified) this.computedInvokerCache = null;
 			return modified;
 		}
 

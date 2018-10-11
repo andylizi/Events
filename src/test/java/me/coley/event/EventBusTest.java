@@ -290,7 +290,7 @@ public class EventBusTest {
 
 		@Listener
 		public void onAllEvent(Event event) {
-			// do nothing
+			fail("onAllEvent() is overrode by MyListenerImpl, this method shouldn't be called");
 		}
 	}
 

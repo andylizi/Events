@@ -30,14 +30,14 @@ final class AccessHelper {
 
 	/**
 	 * Indicate whether we should try to bypass access control using {@code setAccessible(true)}.
-	 * Testing purpose only.
+	 * For testing purpose only.
 	 */
 	static boolean trySuppressAccessControl = true;
 
-	/** Indicate whether we should pretend we are running on Java 1.8. Testing purpose only. */
+	/** Indicate whether we should pretend we are running on Java 1.8. For testing purpose only. */
 	static boolean pretendJava8 = false;
 
-	/** Indicate whether we should pretend we are running on Java 9. Testing purpose only. */
+	/** Indicate whether we should pretend we are running on Java 9. For testing purpose only. */
 	static boolean pretendJava9 = false;
 
 	static {
@@ -286,7 +286,6 @@ final class AccessHelper {
 	 */
 	@SuppressWarnings({ "ManualArrayToCollectionCopy", "UseBulkOperation" })
 	public static List<Method> getMethodsRecursively(Class<?> cls) throws SecurityException {
-		// Uses custom identity function for overriden method handling
 		class MethodWrapper {
 			final Method method;
 			final String name;
@@ -300,6 +299,7 @@ final class AccessHelper {
 				this.returnType = method.getReturnType();
 			}
 
+			// Uses custom identity function for overriden method handling
 			@Override
 			public boolean equals(Object o) {
 				if (this == o) return true;

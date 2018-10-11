@@ -50,7 +50,7 @@ public class EventBusBenchmark {
 
 	static class MyListener {
 		@Listener
-		public void onEvent(TestAlphaEvent event) {
+		public void onAlphaEvent(TestAlphaEvent event) {
 			event.id++;
 		}
 	}
