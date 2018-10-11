@@ -1,19 +1,21 @@
 package me.coley.event;
 
+import java.lang.annotation.Annotation;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.WrongMethodTypeException;
 import java.lang.reflect.AccessibleObject;
 import java.lang.reflect.Method;
-import java.util.Objects;
+import java.lang.reflect.Modifier;
+import java.util.*;
 
 import static java.lang.invoke.MethodHandles.Lookup;
 
 /**
  * Access helper.
  *
- * @since 1.3
  * @author Andy Li
+ * @since 1.3
  */
 final class AccessHelper {
 	/**
@@ -226,6 +228,109 @@ final class AccessHelper {
 		Class<?> enclosingClass;
 		while ((enclosingClass = cls.getEnclosingClass()) != null) cls = enclosingClass;
 		return cls;
+	}
+
+	/**
+	 * Searches the method's annotations for the specified type recursively.
+	 *
+	 * @param <T> the type of the annotation to search for
+	 * @return the annotation if present, {@code null} otherwise
+	 * @throws SecurityException if a security manager denied access to the method's super method
+	 */
+	public static <T extends Annotation> T getAnnotationRecursively(Method method, Class<T> annotationClass)
+			throws SecurityException {
+		String name = method.getName();
+		Class<?>[] params = method.getParameterTypes();
+
+		Method current = method;
+		Class<?> currentClass = current.getDeclaringClass();
+		T result = null;
+		while (true) {
+			// Static method doesn't override, don't recurse inheritance tree
+			if (current != method && Modifier.isStatic(current.getModifiers())) break;
+
+			// Annotation found. Exiting.
+			if ((result = current.getAnnotation(annotationClass)) != null) break;
+
+			Class<?> superClass = currentClass.getSuperclass();
+			if (superClass == Object.class || superClass == null) break; // No more superclasses. Exiting.
+			try {
+				current = superClass.getDeclaredMethod(name, params);
+			} catch (NoSuchMethodException ex) {
+				// Current class doesn't have this method, but maybe its superclass has. Continue.
+			}
+			currentClass = superClass;
+		}
+		return result;
+	}
+
+	/**
+	 * Returns true if an annotation for the specified type is present on the specified method or its super method.
+	 *
+	 * @param <T> the type of the annotation to search for
+	 * @return {@code true} if present, {@code false} otherwise
+	 * @throws SecurityException if a security manager denied access to the method's super method
+	 * @see #getAnnotationRecursively(Method, Class)
+	 */
+	public static <T extends Annotation> boolean isAnnotationPresentRecursively(Method method, Class<T> annotationClass)
+			throws SecurityException {
+		return getAnnotationRecursively(method, annotationClass) != null;
+	}
+
+	/**
+	 * Returns an list containing all the methods of the specified class.
+	 *
+	 * @throws SecurityException if a security manager denied access
+	 */
+	@SuppressWarnings({ "ManualArrayToCollectionCopy", "UseBulkOperation" })
+	public static List<Method> getMethodsRecursively(Class<?> cls) throws SecurityException {
+		// Uses custom identity function for overriden method handling
+		class MethodWrapper {
+			final Method method;
+			final String name;
+			final Class<?>[] paramTypes;
+			final Class<?> returnType;
+
+			MethodWrapper(Method method) {
+				this.method = method;
+				this.name = method.getName();
+				this.paramTypes = method.getParameterTypes();
+				this.returnType = method.getReturnType();
+			}
+
+			@Override
+			public boolean equals(Object o) {
+				if (this == o) return true;
+				if (o == null || getClass() != o.getClass()) return false;
+				MethodWrapper that = (MethodWrapper) o;
+				return Objects.equals(name, that.name) &&
+						Arrays.equals(paramTypes, that.paramTypes) &&
+						// Java language doesn't allow overloading with different return type,
+						// but bytecode does. So let's check it anyway.
+						Objects.equals(returnType, that.returnType);
+			}
+
+			@Override
+			public int hashCode() {
+				return Objects.hash(name, Arrays.hashCode(paramTypes), returnType);
+			}
+		}
+
+		Set<MethodWrapper> set = new LinkedHashSet<>();
+		Class<?> current = cls;
+		do {
+			Method[] methods = current.getDeclaredMethods();
+			for (Method m : methods) {
+				// if there's already a method that is overriding the current method, add() will return false
+				set.add(new MethodWrapper(m));
+			}
+		} while ((current = current.getSuperclass()) != Object.class && current != null);
+
+		// Guava equivalent:       Lists.transform(set, w -> w.method);
+		// Stream API equivalent:  set.stream().map(w -> w.method).collect(Collectors.toList());
+		List<Method> result = new ArrayList<>(set.size());
+		for (MethodWrapper methodWrapper : set) result.add(methodWrapper.method);
+		return result;
 	}
 
 	/**

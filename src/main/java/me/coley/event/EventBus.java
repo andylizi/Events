@@ -121,10 +121,11 @@ public class EventBus {
 	protected static Set<InvokeWrapper> getInvokers(Object object, MethodHandles.Lookup lookup)
 			throws IllegalArgumentException, SecurityException {
 		Set<InvokeWrapper> result = new LinkedHashSet<>();
-		for (Method method : object.getClass().getDeclaredMethods()) {
-			if (method.isAnnotationPresent(Listener.class)) {
-				checkListenerMethod(method);
-				result.add(InvokeWrapper.create(object, method, lookup));
+		for (Method method : AccessHelper.getMethodsRecursively(object.getClass())) {
+			Listener annotation = AccessHelper.getAnnotationRecursively(method, Listener.class);
+			if (annotation != null) {
+				checkListenerMethod(method, false);
+				result.add(InvokeWrapper.create(object, method, annotation.priority(), lookup));
 			}
 		}
 		return result;
@@ -135,8 +136,8 @@ public class EventBus {
 	 *
 	 * @throws IllegalArgumentException if any check failed
 	 */
-	protected static void checkListenerMethod(Method method) throws IllegalArgumentException {
-		if (!method.isAnnotationPresent(Listener.class)) {
+	protected static void checkListenerMethod(Method method, boolean checkAnnotation) throws IllegalArgumentException {
+		if (checkAnnotation && !AccessHelper.isAnnotationPresentRecursively(method, Listener.class)) {
 			throw new IllegalArgumentException("Needs @Listener annotation: " + method.toGenericString());
 		}
 
@@ -151,6 +152,18 @@ public class EventBus {
 		if (!Event.class.isAssignableFrom(params[0])) {
 			throw new IllegalArgumentException("Parameter must be a subclass of the Event class: " + method.toGenericString());
 		}
+	}
+
+	/**
+	 * Determines if the method is a valid listener method.
+	 *
+	 * @return {@code true} if it is, {@code false} otherwise
+	 */
+	public static boolean isListenerMethod(Method method) {
+		if (!AccessHelper.isAnnotationPresentRecursively(method, Listener.class) ||
+				Modifier.isStatic(method.getModifiers())) return false;
+		Class<?>[] params = method.getParameterTypes();
+		return params.length == 1 && Event.class.isAssignableFrom(params[0]);
 	}
 
 	/**
@@ -421,8 +434,20 @@ public class EventBus {
 		 */
 		@SuppressWarnings("unchecked")
 		public static InvokeWrapper create(Object instance, Method method, MethodHandles.Lookup lookup) throws SecurityException {
+			int priority = AccessHelper.getAnnotationRecursively(method, Listener.class).priority();
+			return create(instance, method, priority, lookup);
+		}
+
+		/**
+		 * Constructs an InvokeWrapper with specified {@code priority} value.
+		 *
+		 * @throws SecurityException if the provided {@linkplain MethodHandles.Lookup lookup}
+		 *                           cannot access the specified method
+		 */
+		@SuppressWarnings("unchecked")
+		public static InvokeWrapper create(Object instance, Method method, int priority, MethodHandles.Lookup lookup)
+				throws SecurityException {
 			Class<? extends Event> eventType = (Class<? extends Event>) method.getParameterTypes()[0];
-			int priority = method.getDeclaredAnnotation(Listener.class).priority();
 			MethodHandle methodHandle = AccessHelper.unreflectMethodHandle(lookup, method);
 			return new InvokeWrapper(instance, eventType, method, priority, methodHandle);
 		}

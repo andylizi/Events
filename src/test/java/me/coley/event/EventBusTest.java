@@ -41,10 +41,6 @@ public class EventBusTest {
 		marker.assertMarkedOnce("%s received", TestAlphaEvent.class);
 		marker.assertUnmarked("%s received before post", TestBetaEvent.class);
 		bus.post(new TestBetaEvent());
-		bus.post(new TestGammaEvent());
-		bus.post(new TestDeltaEvent());
-		bus.post(new TestEpsilonEvent());
-		bus.post(new TestZetaEvent());
 		marker.assertMarkedOnce("%s received", TestBetaEvent.class);
 		marker.resetAll();
 
@@ -130,6 +126,15 @@ public class EventBusTest {
 		marker.assertMarkedExactly(null, new Class[]{
 				TestGammaEvent.class, TestEpsilonEvent.class, TestZetaEvent.class
 		});
+	}
+
+	@Test
+	public void testInheritedListener() {
+		new MyListenerImpl();
+		bus.post(new TestAlphaEvent());
+		bus.post(new TestBetaEvent());
+		marker.assertMarkedNTimes("%s received two times", TestAlphaEvent.class, 2);
+		marker.assertMarkedNTimes("%s received", TestBetaEvent.class, 2);
 	}
 
 	@Test
@@ -257,6 +262,37 @@ public class EventBusTest {
 
 		@Listener
 		private void privateListener(Event event) {
+			marker.mark(event.getClass());
+		}
+	}
+
+	abstract class AbstractMyListener {
+		{
+			bus.subscribe(this, MethodHandles.lookup().in(getClass()));
+		}
+
+		@Listener
+		protected abstract void onAlphaEvent(TestAlphaEvent event);
+
+		@Listener
+		private void onBetaEvent(TestBetaEvent event) {
+			marker.mark(TestBetaEvent.class);
+		}
+
+		@Listener
+		public void onAllEvent(Event event) {
+			// do nothing
+		}
+	}
+
+	class MyListenerImpl extends AbstractMyListener {
+		@Override
+		protected void onAlphaEvent(TestAlphaEvent event) {
+			marker.mark(TestAlphaEvent.class);
+		}
+
+		@Override
+		public void onAllEvent(Event event) {
 			marker.mark(event.getClass());
 		}
 	}
