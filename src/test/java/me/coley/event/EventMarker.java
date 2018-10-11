@@ -30,6 +30,10 @@ public class EventMarker<T> {
 		marks.add(subject);
 	}
 
+	public List<T> getMarks() {
+		return marks;
+	}
+
 	public boolean isMarked(T subject) {
 		return marks.contains(subject);
 	}

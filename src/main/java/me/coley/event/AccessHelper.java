@@ -92,21 +92,8 @@ final class AccessHelper {
 				if (accessible) throw ex; // Already accessible but still failed? Giving up.
 
 				boolean tryAgain = false;
-				Lookup newLookup = specifyLookupClass(lookup, method);
-				if (lookup != newLookup) {
-					if (lookup.lookupModes() == newLookup.lookupModes()) {
-						lookup = newLookup;
-						tryAgain = true;
-					} else try { // lookupMode downgraded
-						return newLookup.unreflect(method);
-					} catch (IllegalAccessException ex2) {
-						ex2.addSuppressed(ex);
-						ex = ex2;
-					}
-				}
-
 				if (trySuppressAccessControl) try {
-					tryAgain |= trySetAccessible(method);
+					tryAgain = trySetAccessible(method);
 				} catch (SecurityException ex2) {
 					try {
 						Throwable t = ex;
@@ -114,6 +101,21 @@ final class AccessHelper {
 						t.initCause(ex2);  // set the root cause of `ex` to `ex2`
 					} catch (IllegalStateException ex3) {
 						ex.addSuppressed(ex2);
+					}
+				}
+
+				if (!tryAgain) {
+					Lookup newLookup = narrowLookupClass(lookup, method);
+					if (lookup != newLookup) {
+						if (lookup.lookupModes() == newLookup.lookupModes()) {
+							lookup = newLookup;
+							tryAgain = true;
+						} else try { // lookupMode changed
+							return newLookup.unreflect(method);
+						} catch (IllegalAccessException ex2) {
+							ex2.addSuppressed(ex);
+							ex = ex2;
+						}
 					}
 				}
 
@@ -136,11 +138,11 @@ final class AccessHelper {
 			}
 
 			if (!accessible) {
-				Lookup newLookup = specifyLookupClass(lookup, method);
+				Lookup newLookup = narrowLookupClass(lookup, method);
 				if (lookup != newLookup) {
 					if (lookup.lookupModes() == newLookup.lookupModes()) {
 						lookup = newLookup;
-					} else try {  // lookupMode downgraded
+					} else try {  // lookupMode changed
 						return newLookup.unreflect(method);
 					} catch (IllegalAccessException ex) {
 						if (suppressed != null) suppressed.addSuppressed(ex);
@@ -158,11 +160,11 @@ final class AccessHelper {
 		}
 	}
 
-	static Lookup specifyLookupClass(Lookup lookup, Method method) {
+	static Lookup narrowLookupClass(Lookup lookup, Method method) {
 		Class<?> lookupClass = lookup.lookupClass();
 		Class<?> targetClass = method.getDeclaringClass();
 		if (lookupClass != targetClass && isSamePackageMember(lookupClass, targetClass)) {
-			// targetClass and lookupClass are nestmate, the lookupMode will not change
+			// targetClass and lookupClass are nestmate, the lookupMode should not change
 			return lookup.in(targetClass);
 		}
 		return lookup;

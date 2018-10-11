@@ -215,6 +215,7 @@ public class EventBus {
 	/**
 	 * Event distribution handler.
 	 */
+	@SuppressWarnings("VolatileArrayField")
 	static class Handler {
 		/**
 		 * Event type for this handler.
@@ -238,13 +239,11 @@ public class EventBus {
 		/**
 		 * Cache for the {@link #supertypeHandlers} field.
 		 */
-		@SuppressWarnings("VolatileArrayField")
 		private transient volatile Object[] supertypeHandlerCache = null;
 
 		/**
 		 * Cache for the {@link #invokers} field.
 		 */
-		@SuppressWarnings("VolatileArrayField")
 		private transient volatile Object[] invokerCache = null;
 
 		Handler(Class<? extends Event> eventType) { this.eventType = eventType; }
@@ -278,16 +277,16 @@ public class EventBus {
 			if (hasSupertypeHandler()) {
 				// Prevent ConcurrentModificationException
 				// in cases where a registered item may register more items.
-				Object[] handlerArray = supertypeHandlerCache;
-				if (handlerArray == null) {
+				Object[] cache = supertypeHandlerCache;
+				if (cache == null) {
 					synchronized (this) {
-						if ((handlerArray = supertypeHandlerCache) == null) {
-							handlerArray = supertypeHandlerCache = supertypeHandlers.toArray();
+						if ((cache = supertypeHandlerCache) == null) {
+							cache = supertypeHandlerCache = supertypeHandlers.toArray();
 						}
 					}
 				}
 
-				for (Object handler : handlerArray) {
+				for (Object handler : cache) {
 					((Handler) handler).invoke(event);
 				}
 			}
@@ -299,16 +298,16 @@ public class EventBus {
 		void invoke(Event event) {
 			// Prevent ConcurrentModificationException
 			// in cases where a registered item may register more items.
-			Object[] invokerArray = invokerCache;
-			if (invokerArray == null) {
+			Object[] cache = invokerCache;
+			if (cache == null) {
 				synchronized (this) {
-					if ((invokerArray = invokerCache) == null) {
-						invokerArray = invokerCache = invokers.toArray();
+					if ((cache = invokerCache) == null) {
+						cache = invokerCache = invokers.toArray();
 					}
 				}
 			}
 
-			for (Object invoker : invokerArray) {
+			for (Object invoker : cache) {
 				((InvokeWrapper) invoker).invoke(event);
 			}
 		}
