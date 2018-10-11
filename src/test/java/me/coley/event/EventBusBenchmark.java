@@ -7,6 +7,7 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.lang.invoke.MethodHandles;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -33,8 +34,13 @@ public class EventBusBenchmark {
 	@Setup
 	public void setup() {
 		this.bus = new EventBus();
-		this.bus.subscribe(this);
+		this.bus.subscribe(new MyListener(), MethodHandles.lookup());
 		this.event = new TestAlphaEvent();
+	}
+
+	@TearDown
+	public void tearDown() {
+		if (event.id == 0) throw new RuntimeException("listener wasn't being called!");
 	}
 
 	@Benchmark
@@ -42,8 +48,10 @@ public class EventBusBenchmark {
 		bus.post(event);
 	}
 
-	@Listener
-	public void onEvent(TestAlphaEvent event) {
-		event.id++;
+	static class MyListener {
+		@Listener
+		public void onEvent(TestAlphaEvent event) {
+			event.id++;
+		}
 	}
 }
