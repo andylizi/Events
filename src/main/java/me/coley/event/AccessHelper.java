@@ -233,40 +233,6 @@ final class AccessHelper {
 	}
 
 	/**
-	 * Searches the method's annotations for the specified type recursively.
-	 *
-	 * @param <T> the type of the annotation to search for
-	 * @return the annotation if present, {@code null} otherwise
-	 * @throws SecurityException if a security manager denied access to the method's super method
-	 */
-	public static <T extends Annotation> T getAnnotationRecursively(Method method, Class<T> annotationClass)
-			throws SecurityException {
-		String name = method.getName();
-		Class<?>[] params = method.getParameterTypes();
-
-		Method current = method;
-		Class<?> currentClass = current.getDeclaringClass();
-		T result = null;
-		while (true) {
-			// Static method doesn't override, don't recurse inheritance tree
-			if (current != method && Modifier.isStatic(current.getModifiers())) break;
-
-			// Annotation found. Exiting.
-			if ((result = current.getAnnotation(annotationClass)) != null) break;
-
-			Class<?> superClass = currentClass.getSuperclass();
-			if (superClass == Object.class || superClass == null) break; // No more superclasses. Exiting.
-			try {
-				current = superClass.getDeclaredMethod(name, params);
-			} catch (NoSuchMethodException ex) {
-				// Current class doesn't have this method, but maybe its superclass has. Continue.
-			}
-			currentClass = superClass;
-		}
-		return result;
-	}
-
-	/**
 	 * Returns true if an annotation for the specified type is present on the specified method or its super method.
 	 *
 	 * @param <T> the type of the annotation to search for
@@ -277,6 +243,57 @@ final class AccessHelper {
 	public static <T extends Annotation> boolean isAnnotationPresentRecursively(Method method, Class<T> annotationClass)
 			throws SecurityException {
 		return getAnnotationRecursively(method, annotationClass) != null;
+	}
+
+	/**
+	 * Searches the method's annotations for the specified type recursively.
+	 *
+	 * @param <T> the type of the annotation to search for
+	 * @return the annotation if present, {@code null} otherwise
+	 * @throws SecurityException if a security manager denied access to the method's super method
+	 */
+	public static <T extends Annotation> T getAnnotationRecursively(Method method, Class<T> annotationClass)
+			throws SecurityException {
+		T result;
+		if ((result = method.getAnnotation(annotationClass)) == null) {
+			final String name = method.getName();
+			final Class<?>[] params = method.getParameterTypes();
+
+			Class<?> declaringClass = method.getDeclaringClass();
+			for (Class<?> supertype : computeAllSupertypes(declaringClass, new LinkedHashSet<>())) {
+				try {
+					Method m = supertype.getDeclaredMethod(name, params);
+
+					// Static method doesn't override
+					if (Modifier.isStatic(m.getModifiers())) break;
+
+					if ((result = m.getAnnotation(annotationClass)) != null) break;
+				} catch (NoSuchMethodException ignored) {
+					// Current class doesn't have this method
+				}
+			}
+		}
+		return result;
+	}
+
+	/**
+	 * Computes all supertypes(including superclasses, interfaces, etc) of the specified class.
+	 */
+	static Set<Class<?>> computeAllSupertypes(Class<?> current, Set<Class<?>> set) {
+		Set<Class<?>> next = new LinkedHashSet<>();
+		Class<?> superclass = current.getSuperclass();
+		if (superclass != Object.class && superclass != null) {
+			set.add(superclass);
+			next.add(superclass);
+		}
+		for (Class<?> interfaceClass : current.getInterfaces()) {
+			set.add(interfaceClass);
+			next.add(interfaceClass);
+		}
+		for (Class<?> cls : next) {
+			computeAllSupertypes(cls, set);
+		}
+		return set;
 	}
 
 	/**

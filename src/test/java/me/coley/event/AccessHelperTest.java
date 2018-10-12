@@ -6,12 +6,15 @@ import me.coley.event.testevent.TestDeltaEvent;
 import me.coley.event.testevent.TestZetaEvent;
 import org.junit.*;
 
+import java.io.Serializable;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static org.junit.Assert.*;
@@ -100,18 +103,64 @@ public class AccessHelperTest {
 				"InheritanceTestSampleA.onAlphaEvent(TestAlphaEvent)",
 				"InheritanceTestSampleA.onZetaEvent(TestZetaEvent)",
 				"InheritanceTestSampleA.onEvent(TestDeltaEvent)"),
-				mapMethodToName(methods));
+				mapMethodsToNames(methods));
 	}
 
-	private static List<String> mapMethodToName(List<Method> methods) {
-		return methods.stream()
-				.map(method -> String.format("%s.%s(%s)",
-						method.getDeclaringClass().getSimpleName(),
-						method.getName(),
-						Arrays.stream(method.getParameterTypes())
-								.map(Class::getSimpleName)
-								.collect(Collectors.joining(", "))))
-				.collect(Collectors.toList());
+	@Test
+	public void testGetAnnotationRecursively() throws ReflectiveOperationException {
+		testGetAnnotationRecursively0(AnnotationTestSampleC.class
+				.getDeclaredMethod("onEvent", Event.class), 666);
+		testGetAnnotationRecursively0(AnnotationTestSampleD.class
+				.getDeclaredMethod("onAlphaEvent", TestAlphaEvent.class), 888);
+		testGetAnnotationRecursively0(AnnotationTestSampleC.class
+				.getDeclaredMethod("accept", TestDeltaEvent.class), 999);
+	}
+
+	private void testGetAnnotationRecursively0(Method method, int priority) {
+		String name = methodToName(method);
+		Listener listener = AccessHelper.getAnnotationRecursively(method, Listener.class);
+		assertNotNull("getAnnotationRecursively(" + name + ") returns null", listener);
+		assertEquals("Priority for " + name, priority, listener.priority());
+	}
+
+	@Test
+	public void testComputeAllSupertypes() {
+		assertEquals("computeAllSupertypes(InheritanceTestSampleC.class)", Arrays.asList(
+				"InheritanceTestSampleB",
+				"InheritanceTestSampleA",
+				"Serializable"),
+				mapClassesToNames(AccessHelper.computeAllSupertypes(InheritanceTestSampleC.class, new LinkedHashSet<>())));
+
+		assertEquals("computeAllSupertypes(AnnotationTestSampleD.class)", Arrays.asList(
+				"AnnotationTestSampleC",
+				"AnnotationTestSampleA",
+				"AnnotationTestSampleB",
+				"Serializable",
+				"Consumer"),
+				mapClassesToNames(AccessHelper.computeAllSupertypes(AnnotationTestSampleD.class, new LinkedHashSet<>())));
+	}
+
+	@Test
+	public void testIsDefaultLookUp() {
+		assertTrue("defaultLookup()", AccessHelper.isDefaultLookup(AccessHelper.defaultLookup()));
+		assertFalse("MethodHandles.publicLookup()", AccessHelper.isDefaultLookup(MethodHandles.publicLookup()));
+	}
+
+	private static List<String> mapMethodsToNames(Collection<Method> methods) {
+		return methods.stream().map(AccessHelperTest::methodToName).collect(Collectors.toList());
+	}
+
+	private static List<String> mapClassesToNames(Collection<Class<?>> methods) {
+		return methods.stream().map(Class::getSimpleName).collect(Collectors.toList());
+	}
+
+	private static String methodToName(Method method) {
+		return String.format("%s.%s(%s)",
+				method.getDeclaringClass().getSimpleName(),
+				method.getName(),
+				Arrays.stream(method.getParameterTypes())
+						.map(Class::getSimpleName)
+						.collect(Collectors.joining(", ")));
 	}
 
 	private static <T> void assertEqualsIgnoreOrder(String message, Collection<T> expected, Collection<T> actual) {
@@ -161,7 +210,7 @@ public class AccessHelperTest {
 		}
 	}
 
-	static class InheritanceTestSampleB extends InheritanceTestSampleA {
+	static class InheritanceTestSampleB extends InheritanceTestSampleA implements Serializable {
 		@Override
 		public void onEvent(Event event) {
 			fail("InheritanceTestSampleB.onEvent(Event) called");
@@ -176,6 +225,42 @@ public class AccessHelperTest {
 		@Override
 		public void onEvent(TestBetaEvent event) {
 			fail("InheritanceTestSampleC.onEvent(TestBetaEvent) called");
+		}
+	}
+
+	interface AnnotationTestSampleA extends Consumer<TestDeltaEvent>, Serializable {
+		@Listener(priority = 666)
+		void onEvent(Event event);
+
+		@Override
+		@Listener(priority = 999)
+		void accept(TestDeltaEvent event);
+	}
+
+	abstract static class AnnotationTestSampleB implements AnnotationTestSampleA {
+		@Override
+		public abstract void onEvent(Event event);
+
+		@Listener(priority = 888)
+		protected abstract void onAlphaEvent(TestAlphaEvent event);
+	}
+
+	abstract static class AnnotationTestSampleC extends AnnotationTestSampleB implements Serializable {
+		@Override
+		public void onEvent(Event event) {
+			fail("AnnotationTestSampleC.onEvent() called");
+		}
+
+		@Override
+		public void accept(TestDeltaEvent event) {
+			fail("AnnotationTestSampleC.accept() called");
+		}
+	}
+
+	static class AnnotationTestSampleD extends AnnotationTestSampleC implements AnnotationTestSampleA {
+		@Override
+		protected void onAlphaEvent(TestAlphaEvent event) {
+			fail("AnnotationTestSampleD.onAlphaEvent() called");
 		}
 	}
 }
