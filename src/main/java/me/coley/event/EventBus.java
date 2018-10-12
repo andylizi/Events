@@ -141,15 +141,18 @@ public class EventBus {
 			throw new IllegalArgumentException("Needs @Listener annotation: " + method.toGenericString());
 		}
 
-		if (Modifier.isStatic(method.getModifiers())) {
+		int modifiers = method.getModifiers();
+		if (Modifier.isStatic(modifiers)) {
 			throw new IllegalArgumentException("Method cannot be static: " + method.toGenericString());
 		}
+		if (Modifier.isAbstract(modifiers)) {
+			throw new IllegalArgumentException("Method cannot be abstract: " + method.toGenericString());
+		}
 
-		Class<?>[] params = method.getParameterTypes();
-		if (params.length != 1) {
+		if (method.getParameterCount() != 1) {
 			throw new IllegalArgumentException("Must have exactly one parameter: " + method.toGenericString());
 		}
-		if (!Event.class.isAssignableFrom(params[0])) {
+		if (!Event.class.isAssignableFrom(method.getParameterTypes()[0])) {
 			throw new IllegalArgumentException("Parameter must be a subclass of the Event class: " + method.toGenericString());
 		}
 	}
@@ -160,10 +163,13 @@ public class EventBus {
 	 * @return {@code true} if it is, {@code false} otherwise
 	 */
 	public static boolean isListenerMethod(Method method) {
-		if (!AccessHelper.isAnnotationPresentRecursively(method, Listener.class) ||
-				Modifier.isStatic(method.getModifiers())) return false;
-		Class<?>[] params = method.getParameterTypes();
-		return params.length == 1 && Event.class.isAssignableFrom(params[0]);
+		if (AccessHelper.isAnnotationPresentRecursively(method, Listener.class) &&
+				method.getParameterCount() == 1 &&
+				Event.class.isAssignableFrom(method.getParameterTypes()[0])) {
+			int modifiers = method.getModifiers();
+			return !Modifier.isStatic(modifiers) && !Modifier.isAbstract(modifiers);
+		}
+		return false;
 	}
 
 	/**

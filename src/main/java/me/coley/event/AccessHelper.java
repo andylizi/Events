@@ -291,12 +291,15 @@ final class AccessHelper {
 			final String name;
 			final Class<?>[] paramTypes;
 			final Class<?> returnType;
+			final boolean canOverride;
 
 			MethodWrapper(Method method) {
 				this.method = method;
 				this.name = method.getName();
 				this.paramTypes = method.getParameterTypes();
 				this.returnType = method.getReturnType();
+				int modifiers = method.getModifiers();
+				this.canOverride = !Modifier.isStatic(modifiers) && !Modifier.isFinal(modifiers);
 			}
 
 			// Uses custom identity function for overriden method handling
@@ -309,7 +312,10 @@ final class AccessHelper {
 						Arrays.equals(paramTypes, that.paramTypes) &&
 						// Java language doesn't allow overloading with different return type,
 						// but bytecode does. So let's check it anyway.
-						Objects.equals(returnType, that.returnType);
+						Objects.equals(returnType, that.returnType) &&
+						// If either of the two methods are static or final, check declaring class as well
+						((canOverride && that.canOverride) ||
+								Objects.equals(method.getDeclaringClass(), that.method.getDeclaringClass()));
 			}
 
 			@Override

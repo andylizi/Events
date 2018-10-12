@@ -2,6 +2,8 @@ package me.coley.event;
 
 import me.coley.event.testevent.TestAlphaEvent;
 import me.coley.event.testevent.TestBetaEvent;
+import me.coley.event.testevent.TestDeltaEvent;
+import me.coley.event.testevent.TestZetaEvent;
 import org.junit.*;
 
 import java.lang.invoke.MethodHandles;
@@ -94,7 +96,10 @@ public class AccessHelperTest {
 		assertEqualsIgnoreOrder("getMethodsRecursively(InheritanceTestSampleC.class)", Arrays.asList(
 				"InheritanceTestSampleC.onEvent(TestBetaEvent)",
 				"InheritanceTestSampleB.onEvent(Event)",
-				"InheritanceTestSampleA.onAlphaEvent(TestAlphaEvent)"),
+				"InheritanceTestSampleB.onEvent(TestDeltaEvent)",
+				"InheritanceTestSampleA.onAlphaEvent(TestAlphaEvent)",
+				"InheritanceTestSampleA.onZetaEvent(TestZetaEvent)",
+				"InheritanceTestSampleA.onEvent(TestDeltaEvent)"),
 				mapMethodToName(methods));
 	}
 
@@ -139,8 +144,16 @@ public class AccessHelperTest {
 			fail("InheritanceTestSampleA.onAlphaEvent(TestAlphaEvent) called");
 		}
 
+		public final void onZetaEvent(TestZetaEvent event) {
+			fail("InheritanceTestSampleA.onZetaEvent(TestZetaEvent) called");
+		}
+
 		public void onEvent(TestBetaEvent event) {
 			fail("InheritanceTestSampleA.onEvent(TestBetaEvent) called");
+		}
+
+		public static void onEvent(TestDeltaEvent event) {
+			fail("InheritanceTestSampleA.onEvent(TestDeltaEvent) called");
 		}
 
 		public void onEvent(Event event) {
@@ -152,6 +165,10 @@ public class AccessHelperTest {
 		@Override
 		public void onEvent(Event event) {
 			fail("InheritanceTestSampleB.onEvent(Event) called");
+		}
+
+		public static void onEvent(TestDeltaEvent event) {
+			fail("InheritanceTestSampleB.onEvent(TestDeltaEvent) called");
 		}
 	}
 
