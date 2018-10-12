@@ -1,10 +1,11 @@
-.metadata/**
-.recommenders/**
-.settings/**
-.idea/**
-bin/**
-target/**
+.metadata/
+.recommenders/
+.settings/
+.idea/
+bin/
+target/
 
+*___jb_*___
 *.iml
 
 .classpath

@@ -2,10 +2,7 @@ package me.coley.event;
 
 import org.junit.*;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Objects;
+import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -13,6 +10,8 @@ import java.util.stream.Stream;
 import static org.junit.Assert.*;
 
 /**
+ * Test helper.
+ *
  * @author Andy Li
  */
 public class EventMarker<T> {
@@ -28,13 +27,23 @@ public class EventMarker<T> {
 	}
 
 	public void mark(T subject) {
-		if (isUnmarked(subject)) {
-			marks.add(subject);
-		}
+		marks.add(subject);
+	}
+
+	public List<T> getMarks() {
+		return marks;
 	}
 
 	public boolean isMarked(T subject) {
 		return marks.contains(subject);
+	}
+
+	public int getMarkedTimes(T subject) {
+		return Collections.frequency(marks, subject);
+	}
+
+	public boolean isMarkedNTimes(T subject, int expectedCount) {
+		return getMarkedTimes(subject) == expectedCount;
 	}
 
 	public boolean isMarkedOnce(T subject) {
@@ -43,7 +52,7 @@ public class EventMarker<T> {
 			if (Objects.equals(mark, subject)) {
 				if (!result) {  // first occurrence
 					result = true;
-				} else {       // secound occurrence
+				} else {        // secound occurrence
 					return false;
 				}
 			}
@@ -64,7 +73,12 @@ public class EventMarker<T> {
 	}
 
 	public void assertMarkedOnce(String message, T subject) {
-		assertTrue(message, subject, isMarkedOnce(subject));
+		assertMarkedNTimes(message, subject, 1);
+	}
+
+	public void assertMarkedNTimes(String message, T subject, int expectedCount) {
+		if (message.contains("%s")) message = message.replace("%s", toStringFunction.apply(subject));
+		assertEquals(message, expectedCount, Collections.frequency(marks, subject));
 	}
 
 	public void assertUnmarked(String message, T subject) {

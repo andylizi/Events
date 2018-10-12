@@ -9,19 +9,19 @@ See: [Recaf](https://github.com/Col-E/Recaf)
 ### Using in your project
 
 This project is hosted via JitPack.io. You can add this project to your maven project like so:
-```
+```xml
 <repositories>
-	<repository>
-	    <id>jitpack.io</id>
-	    <url>https://jitpack.io</url>
-	</repository>
+    <repository>
+        <id>jitpack.io</id>
+        <url>https://jitpack.io</url>
+    </repository>
 </repositories>
 <dependencies>
-	<dependency>
-	    <groupId>com.github.Col-E</groupId>
-	    <artifactId>Events</artifactId>
-	    <version>1.3</version>
-	</dependency>
+    <dependency>
+        <groupId>com.github.Col-E</groupId>
+        <artifactId>Events</artifactId>
+        <version>1.4</version>
+    </dependency>
 </dependencies>
 ```
 

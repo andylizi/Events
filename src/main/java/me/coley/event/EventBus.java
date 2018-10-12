@@ -32,7 +32,8 @@ public class EventBus {
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup object} used in {@link MethodHandle} creation
-	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object},
+	 *                                  or the {@code object} doesn't have any listener methods
 	 * @throws SecurityException        if a security manager denied access to the declared methods
 	 *                                  of the class of the {@code object}, or the provided
 	 *                                  {@linkplain MethodHandles.Lookup lookup object}
@@ -48,6 +49,9 @@ public class EventBus {
 		}
 
 		Set<InvokeWrapper> invokers = getInvokers(object, lookup);
+		if(invokers.isEmpty()) {
+			throw new IllegalArgumentException("the object doesn't have any listener methods");
+		}
 		listenerToInvokers.put(object, invokers);
 		for (InvokeWrapper invoker : invokers) {
 			handlerRegistry.getHandler(invoker.eventType).subscribe(invoker);
@@ -58,7 +62,8 @@ public class EventBus {
 	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
-	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object},
+	 *                                  or the {@code object} doesn't have any listener methods
 	 * @throws SecurityException        if a security manager denied access to the declared methods
 	 *                                  of the class of the {@code object}, or the default
 	 *                                  {@linkplain MethodHandles.Lookup lookup object} cannot access
@@ -94,8 +99,7 @@ public class EventBus {
 	 * @param event event to post
 	 */
 	public void post(Event event) {
-		handlerRegistry.getHandler(Objects.requireNonNull(event, "event").getClass())
-				.post(event);
+		handlerRegistry.getHandler(event.getClass()).post(event);
 	}
 
 	/**
@@ -121,10 +125,11 @@ public class EventBus {
 	protected static Set<InvokeWrapper> getInvokers(Object object, MethodHandles.Lookup lookup)
 			throws IllegalArgumentException, SecurityException {
 		Set<InvokeWrapper> result = new LinkedHashSet<>();
-		for (Method method : object.getClass().getDeclaredMethods()) {
-			if (method.isAnnotationPresent(Listener.class)) {
-				checkListenerMethod(method);
-				result.add(InvokeWrapper.create(object, method, lookup));
+		for (Method method : AccessHelper.getMethodsRecursively(object.getClass())) {
+			Listener annotation = AccessHelper.getAnnotationRecursively(method, Listener.class);
+			if (annotation != null) {
+				checkListenerMethod(method, false);
+				result.add(InvokeWrapper.create(object, method, annotation.priority(), lookup));
 			}
 		}
 		return result;
@@ -135,22 +140,40 @@ public class EventBus {
 	 *
 	 * @throws IllegalArgumentException if any check failed
 	 */
-	protected static void checkListenerMethod(Method method) throws IllegalArgumentException {
-		if (!method.isAnnotationPresent(Listener.class)) {
+	protected static void checkListenerMethod(Method method, boolean checkAnnotation) throws IllegalArgumentException {
+		if (checkAnnotation && !AccessHelper.isAnnotationPresentRecursively(method, Listener.class)) {
 			throw new IllegalArgumentException("Needs @Listener annotation: " + method.toGenericString());
 		}
 
-		if (Modifier.isStatic(method.getModifiers())) {
+		int modifiers = method.getModifiers();
+		if (Modifier.isStatic(modifiers)) {
 			throw new IllegalArgumentException("Method cannot be static: " + method.toGenericString());
 		}
+		if (Modifier.isAbstract(modifiers)) {
+			throw new IllegalArgumentException("Method cannot be abstract: " + method.toGenericString());
+		}
 
-		Class<?>[] params = method.getParameterTypes();
-		if (params.length != 1) {
+		if (method.getParameterCount() != 1) {
 			throw new IllegalArgumentException("Must have exactly one parameter: " + method.toGenericString());
 		}
-		if (!Event.class.isAssignableFrom(params[0])) {
+		if (!Event.class.isAssignableFrom(method.getParameterTypes()[0])) {
 			throw new IllegalArgumentException("Parameter must be a subclass of the Event class: " + method.toGenericString());
 		}
+	}
+
+	/**
+	 * Determines if the method is a valid listener method.
+	 *
+	 * @return {@code true} if it is, {@code false} otherwise
+	 */
+	public static boolean isListenerMethod(Method method) {
+		if (AccessHelper.isAnnotationPresentRecursively(method, Listener.class) &&
+				method.getParameterCount() == 1 &&
+				Event.class.isAssignableFrom(method.getParameterTypes()[0])) {
+			int modifiers = method.getModifiers();
+			return !Modifier.isStatic(modifiers) && !Modifier.isAbstract(modifiers);
+		}
+		return false;
 	}
 
 	/**
@@ -202,6 +225,7 @@ public class EventBus {
 	/**
 	 * Event distribution handler.
 	 */
+	@SuppressWarnings("VolatileArrayField")
 	static class Handler {
 		/**
 		 * Event type for this handler.
@@ -211,28 +235,21 @@ public class EventBus {
 		/**
 		 * All known handlers which event type is a supertype of this handler's event type.
 		 * <p>
-		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #supertypeHandlerCache}.
+		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #computedInvokerCache}.
 		 */
 		private final Set<Handler> supertypeHandlers = new HashSet<>();
 
 		/**
 		 * Set of {@linkplain InvokeWrapper invokers} registered in this handler.
 		 * <p>
-		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #invokerCache}.
+		 * <b>Note</b>: any modification to this collection MUST also invalidate the {@link #computedInvokerCache}.
 		 */
-		private final NavigableSet<InvokeWrapper> invokers = new TreeSet<>(InvokeWrapper.COMPARATOR);
+		private final SortedSet<InvokeWrapper> invokers = new TreeSet<>(InvokeWrapper.COMPARATOR);
 
 		/**
-		 * Cache for the {@link #supertypeHandlers} field.
+		 * Computed invoker cache.
 		 */
-		@SuppressWarnings("VolatileArrayField")
-		private transient volatile Object[] supertypeHandlerCache = null;
-
-		/**
-		 * Cache for the {@link #invokers} field.
-		 */
-		@SuppressWarnings("VolatileArrayField")
-		private transient volatile Object[] invokerCache = null;
+		private transient volatile InvokeWrapper[] computedInvokerCache = null;
 
 		Handler(Class<? extends Event> eventType) { this.eventType = eventType; }
 
@@ -260,55 +277,43 @@ public class EventBus {
 		 * @param event event to post
 		 */
 		public void post(Event event) {
-			invoke(event);
-
-			if (hasSupertypeHandler()) {
-				// Prevent ConcurrentModificationException
-				// in cases where a registered item may register more items.
-				Object[] handlerArray = supertypeHandlerCache;
-				if (handlerArray == null) {
-					synchronized (this) {
-						if ((handlerArray = supertypeHandlerCache) == null) {
-							handlerArray = supertypeHandlerCache = supertypeHandlers.toArray();
-						}
-					}
-				}
-
-				for (Object handler : handlerArray) {
-					((Handler) handler).invoke(event);
-				}
-			}
-		}
-
-		/**
-		 * Invokes all invokers in this handler.
-		 */
-		void invoke(Event event) {
-			// Prevent ConcurrentModificationException
-			// in cases where a registered item may register more items.
-			Object[] invokerArray = invokerCache;
-			if (invokerArray == null) {
+			InvokeWrapper[] cache = this.computedInvokerCache;
+			if (cache == null) {
 				synchronized (this) {
-					if ((invokerArray = invokerCache) == null) {
-						invokerArray = invokerCache = invokers.toArray();
+					if ((cache = this.computedInvokerCache) == null) {
+						cache = this.computedInvokerCache = computeInvokerCache();
 					}
 				}
 			}
 
-			for (Object invoker : invokerArray) {
-				((InvokeWrapper) invoker).invoke(event);
+			for (InvokeWrapper invoker : cache) {
+				invoker.invoke(event);
 			}
 		}
 
 		/**
-		 * Invalidates the {@link #invokerCache} and the {@link #supertypeHandlerCache}
-		 * when {@code modified} is {@code true}.
+		 * Computes all invokers that need to be invoked when this handler received an event.
+		 */
+		synchronized InvokeWrapper[] computeInvokerCache() {
+			SortedSet<InvokeWrapper> set;
+			if (hasSupertypeHandler()) {
+				set = new TreeSet<>(this.invokers);
+				for (Handler supertypeHandler : this.supertypeHandlers)
+					set.addAll(supertypeHandler.invokers);
+			} else {
+				set = this.invokers;
+			}
+			return set.toArray(new InvokeWrapper[0]);
+		}
+
+		/**
+		 * Invalidates the {@link #computedInvokerCache} when {@code modified} is {@code true}.
 		 *
 		 * @param modified should we invalidate?
 		 * @return same value as {@code modified}
 		 */
 		boolean invalidateCache(boolean modified) {
-			if (modified) this.invokerCache = this.supertypeHandlerCache = null;
+			if (modified) this.computedInvokerCache = null;
 			return modified;
 		}
 
@@ -421,8 +426,20 @@ public class EventBus {
 		 */
 		@SuppressWarnings("unchecked")
 		public static InvokeWrapper create(Object instance, Method method, MethodHandles.Lookup lookup) throws SecurityException {
+			int priority = AccessHelper.getAnnotationRecursively(method, Listener.class).priority();
+			return create(instance, method, priority, lookup);
+		}
+
+		/**
+		 * Constructs an InvokeWrapper with specified {@code priority} value.
+		 *
+		 * @throws SecurityException if the provided {@linkplain MethodHandles.Lookup lookup}
+		 *                           cannot access the specified method
+		 */
+		@SuppressWarnings("unchecked")
+		public static InvokeWrapper create(Object instance, Method method, int priority, MethodHandles.Lookup lookup)
+				throws SecurityException {
 			Class<? extends Event> eventType = (Class<? extends Event>) method.getParameterTypes()[0];
-			int priority = method.getDeclaredAnnotation(Listener.class).priority();
 			MethodHandle methodHandle = AccessHelper.unreflectMethodHandle(lookup, method);
 			return new InvokeWrapper(instance, eventType, method, priority, methodHandle);
 		}

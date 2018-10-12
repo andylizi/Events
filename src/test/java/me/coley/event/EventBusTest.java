@@ -38,53 +38,54 @@ public class EventBusTest {
 		};
 		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
-		marker.assertMarkedOnce("%s received", TestAlphaEvent.class);
-		marker.assertUnmarked("%s received before post", TestBetaEvent.class);
+		marker.assertMarkedOnce("One %s should be delivered", TestAlphaEvent.class);
+		marker.assertUnmarked("%s shouldn't be delivered", TestBetaEvent.class);
 		bus.post(new TestBetaEvent());
-		bus.post(new TestGammaEvent());
-		bus.post(new TestDeltaEvent());
-		bus.post(new TestEpsilonEvent());
-		bus.post(new TestZetaEvent());
-		marker.assertMarkedOnce("%s received", TestBetaEvent.class);
+		marker.assertMarkedOnce("One %s should be delivered", TestBetaEvent.class);
 		marker.resetAll();
 
 		bus.unsubscribe(object);
 		bus.post(new TestAlphaEvent());
 		bus.post(new TestZetaEvent());
-		marker.assertUnmarked("%s received after unsubscribed", TestAlphaEvent.class);
+		marker.assertUnmarked("After unsubscribing, %s shouldn't be delivered", TestAlphaEvent.class);
 		marker.resetAll();
 
 		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
-		marker.assertMarkedOnce("%s received again", TestAlphaEvent.class);
+		marker.assertMarkedOnce("One %s should be delivered after subscribing again", TestAlphaEvent.class);
 	}
 
 	@Test
 	public void testPriority() {
-		List<Integer> invocationOrder = new ArrayList<>(4);
+		List<Integer> deliveredOrder = new ArrayList<>(4);
 		bus.subscribe(new Object() {
 			@Listener(priority = 1)
-			public void priority1(TestAlphaEvent event) {
-				invocationOrder.add(1);
+			public void onEvent1(TestAlphaEvent event) {
+				deliveredOrder.add(1);
 			}
 
 			@Listener(priority = 2)
-			public void priority2(TestAlphaEvent event) {
-				invocationOrder.add(2);
+			public void onEvent2(TestAlphaEvent event) {
+				deliveredOrder.add(2);
 			}
 
 			@Listener(priority = 2)
-			public void priority2_(TestAlphaEvent event) {
-				invocationOrder.add(2);
+			public void onEvent2(Event event) {
+				deliveredOrder.add(2);
 			}
 
-			@Listener(priority = 5)
-			public void priority5(TestAlphaEvent event) {
-				invocationOrder.add(5);
+			@Listener(priority = 3)
+			public void onEvent3(TestAlphaEvent event) {
+				deliveredOrder.add(3);
+			}
+
+			@Listener(priority = 4)
+			public void onEvent4(Event event) {
+				deliveredOrder.add(4);
 			}
 		});
 		bus.post(new TestAlphaEvent());
-		assertEquals("invocation order", Arrays.asList(1, 2, 2, 5), invocationOrder);
+		assertEquals("delivered order", Arrays.asList(1, 2, 2, 3, 4), deliveredOrder);
 	}
 
 	@Test
@@ -133,15 +134,28 @@ public class EventBusTest {
 	}
 
 	@Test
-	public void testNonPublicListener() {
-		bus.subscribe(new PackageListener(marker), MethodHandles.lookup());
+	public void testInheritedListener() {
+		new MyListenerImpl();
 		bus.post(new TestAlphaEvent());
-		marker.assertMarked("%s received", TestAlphaEvent.class);
+		bus.post(new TestBetaEvent());
+		marker.assertMarkedNTimes("Two %ss should be delivered", TestAlphaEvent.class, 2);
+		marker.assertMarkedNTimes("Two %ss should be delivered", TestBetaEvent.class, 2);
 	}
 
 	@Test
-	public void testMemberClassListener() {
+	public void testNonPublicListener() {
+		bus.subscribe(new PackageListener(marker), MethodHandles.lookup());
+		bus.post(new TestAlphaEvent());
+		marker.assertMarkedNTimes("Two %ss should be delivered", TestAlphaEvent.class, 2);
+	}
+
+	@Test
+	public void testMemberClassListenerPretendJava8() {
 		testMemberClassListener0(true, false);
+	}
+
+	@Test
+	public void testMemberClassListenerPretendJava9() {
 		testMemberClassListener0(false, true);
 	}
 
@@ -154,7 +168,7 @@ public class EventBusTest {
 		try {
 			bus.subscribe(new MemberListener(marker), MethodHandles.lookup());
 			bus.post(new TestAlphaEvent());
-			marker.assertMarked("%s received", TestAlphaEvent.class);
+			marker.assertMarkedNTimes("Three %ss should be delivered", TestAlphaEvent.class, 3);
 		} finally {
 			AccessHelper.trySuppressAccessControl = true;
 			AccessHelper.pretendJava8 = false;
@@ -164,12 +178,12 @@ public class EventBusTest {
 
 	@Test
 	public void testConcurrentModification() {
-		List<Integer> invocationOrder = new ArrayList<>(3);
+		List<Integer> deliveredOrder = new ArrayList<>(3);
 		Object object2 = new Object() {
 			@Listener
 			public void onEvent(TestAlphaEvent event) {
 				bus.unsubscribe(this);
-				invocationOrder.add(2);
+				deliveredOrder.add(2);
 			}
 		};
 		bus.subscribe(new Object() {
@@ -177,17 +191,17 @@ public class EventBusTest {
 			public void onEvent(TestAlphaEvent event) {
 				bus.subscribe(object2);
 				bus.unsubscribe(this);
-				invocationOrder.add(1);
+				deliveredOrder.add(1);
 			}
 		});
 		bus.post(new TestAlphaEvent());
 		bus.post(new TestAlphaEvent());
 		bus.post(new TestAlphaEvent());
-		assertEquals("invocation order", Arrays.asList(1, 2), invocationOrder);
+		assertEquals("delivered order", Arrays.asList(1, 2), deliveredOrder);
 	}
 
 	@Test
-	public void testSubscribeAgain() {
+	public void testSubscribeRepeatedly() {
 		Object object = new Object() {
 			@Listener
 			public void onEvent(TestAlphaEvent event) {
@@ -197,11 +211,11 @@ public class EventBusTest {
 		bus.subscribe(object);
 		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
-		marker.assertMarkedOnce("%s received twice or more times", TestAlphaEvent.class);
+		marker.assertMarkedOnce("One %s should be delivered", TestAlphaEvent.class);
 	}
 
 	@Test
-	public void testUnsubscribAgain() {
+	public void testUnsubscribeRepeatedly() {
 		Object object = new Object() {
 			@Listener
 			public void onEvent(TestAlphaEvent event) {
@@ -212,22 +226,59 @@ public class EventBusTest {
 		bus.unsubscribe(object);
 		bus.unsubscribe(object);
 		bus.post(new TestAlphaEvent());
-		marker.assertUnmarked("%s received", TestAlphaEvent.class);
+		marker.assertUnmarked("After unsubscribing, %s shouldn't be delivered", TestAlphaEvent.class);
 	}
 
-	@Test(expected = IllegalArgumentException.class)
-	public void testIllegalListener1() {
+	@Test
+	public void testNonVoidListener() {
 		bus.subscribe(new Object() {
 			@Listener
-			public void onEvent(TestAlphaEvent event, Void anotherArgument) {
-				fail("illegal listener called");
+			public int onAlphaEvent(TestAlphaEvent event) {
+				marker.mark(TestAlphaEvent.class);
+				return event.id;
 			}
 		});
+		bus.post(new TestAlphaEvent());
+		marker.assertMarkedOnce("One %s should be delivered", TestAlphaEvent.class);
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testEmptyListener() {
+		bus.subscribe(new Object());
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testIllegalListener1() throws ReflectiveOperationException {
+		Object object = new Object() {
+			@Listener
+			public void onEvent(TestAlphaEvent event, Void anotherArgument) {
+				fail("Illegal listener shouldn't be called");
+			}
+		};
+		assertFalse("Not a valid listener method", EventBus.isListenerMethod(object.getClass()
+				.getDeclaredMethod("onEvent", TestAlphaEvent.class, Void.class)));
+		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
 	}
 
 	@Test(expected = IllegalArgumentException.class)
-	public void testIllegalListener2() {
+	public void testIllegalListener2() throws ReflectiveOperationException {
+		Object object = new Object() {
+			@Listener
+			public void onEvent(Void notAnEvent) {
+				fail("Illegal listener shouldn't be called");
+			}
+		};
+		assertFalse("Not a valid listener method", EventBus.isListenerMethod(object.getClass()
+				.getDeclaredMethod("onEvent", Void.class)));
+		bus.subscribe(object);
+		bus.post(new TestAlphaEvent());
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testIllegalListener3() throws ReflectiveOperationException {
+		assertFalse("Not a valid listener method", EventBus.isListenerMethod(IllegalStaticListener.class
+				.getDeclaredMethod("onEvent", TestAlphaEvent.class)));
 		bus.subscribe(new IllegalStaticListener());
 		bus.post(new TestAlphaEvent());
 	}
@@ -236,7 +287,7 @@ public class EventBusTest {
 	static final class IllegalStaticListener {
 		@Listener
 		public static void onEvent(TestAlphaEvent event) {
-			fail("static listener called");
+			fail("Static listener method shouldn't be called");
 		}
 	}
 
@@ -257,6 +308,37 @@ public class EventBusTest {
 
 		@Listener
 		private void privateListener(Event event) {
+			marker.mark(event.getClass());
+		}
+	}
+
+	abstract class AbstractMyListener {
+		{
+			bus.subscribe(this, MethodHandles.lookup().in(getClass()));
+		}
+
+		@Listener
+		protected abstract void onAlphaEvent(TestAlphaEvent event);
+
+		@Listener
+		private void onBetaEvent(TestBetaEvent event) {
+			marker.mark(TestBetaEvent.class);
+		}
+
+		@Listener
+		public void onAllEvent(Event event) {
+			fail("onAllEvent() is overrode by MyListenerImpl, this method shouldn't be called");
+		}
+	}
+
+	class MyListenerImpl extends AbstractMyListener {
+		@Override
+		protected void onAlphaEvent(TestAlphaEvent event) {
+			marker.mark(TestAlphaEvent.class);
+		}
+
+		@Override
+		public void onAllEvent(Event event) {
 			marker.mark(event.getClass());
 		}
 	}
