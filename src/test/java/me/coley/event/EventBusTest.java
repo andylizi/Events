@@ -243,6 +243,11 @@ public class EventBusTest {
 	}
 
 	@Test(expected = IllegalArgumentException.class)
+	public void testEmptyListener() {
+		bus.subscribe(new Object());
+	}
+
+	@Test(expected = IllegalArgumentException.class)
 	public void testIllegalListener1() throws ReflectiveOperationException {
 		Object object = new Object() {
 			@Listener

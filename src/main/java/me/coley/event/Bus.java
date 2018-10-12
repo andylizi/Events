@@ -16,7 +16,8 @@ public final class Bus {
 	 *
 	 * @param object object whose listener methods should be registered
 	 * @param lookup the {@linkplain MethodHandles.Lookup Lookup object} used in {@link MethodHandle} creation
-	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object},
+	 *                                  or the {@code object} doesn't have any listener methods
 	 * @throws SecurityException        if a security manager denied access to the declared methods
 	 *                                  of the class of the {@code object}, or the provided
 	 *                                  {@linkplain MethodHandles.Lookup lookup object}
@@ -33,7 +34,8 @@ public final class Bus {
 	 * Registers all listener methods on {@code object} for receiving events.
 	 *
 	 * @param object object whose listener methods should be registered
-	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object}
+	 * @throws IllegalArgumentException if there's an invalid listener method on the {@code object},
+	 *                                  or the {@code object} doesn't have any listener methods
 	 * @throws SecurityException        if a security manager denied access to the declared methods
 	 *                                  of the class of the {@code object}, or the default
 	 *                                  {@linkplain MethodHandles.Lookup lookup object} cannot access
