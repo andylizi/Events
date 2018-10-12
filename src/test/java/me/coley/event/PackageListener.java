@@ -14,4 +14,8 @@ class PackageListener {
 	void packageListener(Event event) {
 		marker.mark(event.getClass());
 	}
+
+	static class MemberClass {
+		public void foo() { }
+	}
 }
