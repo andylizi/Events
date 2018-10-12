@@ -94,8 +94,7 @@ public class EventBus {
 	 * @param event event to post
 	 */
 	public void post(Event event) {
-		handlerRegistry.getHandler(Objects.requireNonNull(event, "event").getClass())
-				.post(event);
+		handlerRegistry.getHandler(event.getClass()).post(event);
 	}
 
 	/**

@@ -229,19 +229,51 @@ public class EventBusTest {
 		marker.assertUnmarked("After unsubscribing, %s shouldn't be delivered", TestAlphaEvent.class);
 	}
 
-	@Test(expected = IllegalArgumentException.class)
-	public void testIllegalListener1() {
+	@Test
+	public void testNonVoidListener() {
 		bus.subscribe(new Object() {
 			@Listener
-			public void onEvent(TestAlphaEvent event, Void anotherArgument) {
-				fail("illegal listener shouldn't be called");
+			public int onAlphaEvent(TestAlphaEvent event) {
+				marker.mark(TestAlphaEvent.class);
+				return event.id;
 			}
 		});
+		bus.post(new TestAlphaEvent());
+		marker.assertMarkedOnce("One %s should be delivered", TestAlphaEvent.class);
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testIllegalListener1() throws ReflectiveOperationException {
+		Object object = new Object() {
+			@Listener
+			public void onEvent(TestAlphaEvent event, Void anotherArgument) {
+				fail("Illegal listener shouldn't be called");
+			}
+		};
+		assertFalse("Not a valid listener method", EventBus.isListenerMethod(object.getClass()
+				.getDeclaredMethod("onEvent", TestAlphaEvent.class, Void.class)));
+		bus.subscribe(object);
 		bus.post(new TestAlphaEvent());
 	}
 
 	@Test(expected = IllegalArgumentException.class)
-	public void testIllegalListener2() {
+	public void testIllegalListener2() throws ReflectiveOperationException {
+		Object object = new Object() {
+			@Listener
+			public void onEvent(Void notAnEvent) {
+				fail("Illegal listener shouldn't be called");
+			}
+		};
+		assertFalse("Not a valid listener method", EventBus.isListenerMethod(object.getClass()
+				.getDeclaredMethod("onEvent", Void.class)));
+		bus.subscribe(object);
+		bus.post(new TestAlphaEvent());
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void testIllegalListener3() throws ReflectiveOperationException {
+		assertFalse("Not a valid listener method", EventBus.isListenerMethod(IllegalStaticListener.class
+				.getDeclaredMethod("onEvent", TestAlphaEvent.class)));
 		bus.subscribe(new IllegalStaticListener());
 		bus.post(new TestAlphaEvent());
 	}
@@ -250,7 +282,7 @@ public class EventBusTest {
 	static final class IllegalStaticListener {
 		@Listener
 		public static void onEvent(TestAlphaEvent event) {
-			fail("static listener shouldn't be called");
+			fail("Static listener method shouldn't be called");
 		}
 	}
 
