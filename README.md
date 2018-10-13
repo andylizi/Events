@@ -20,7 +20,8 @@ This project is hosted via JitPack.io. You can add this project to your maven pr
     <dependency>
         <groupId>com.github.Col-E</groupId>
         <artifactId>Events</artifactId>
-        <version>1.4</version>
+        <!-- Unique version because Jitpack couldn't re-fresh the 1.4 release -->
+        <version>1.4.1</version> 
     </dependency>
 </dependencies>
 ```
